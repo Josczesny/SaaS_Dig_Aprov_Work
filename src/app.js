@@ -64,6 +64,116 @@ app.use((req, res, next) => {
   next();
 });
 
+// Middleware global para desabilitar cache
+app.use((req, res, next) => {
+  console.log('=== MIDDLEWARE GLOBAL CACHE ===');
+  console.log('URL:', req.url);
+  console.log('Method:', req.method);
+  console.log('Headers da requisição:', req.headers);
+  
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.removeHeader('ETag');
+  res.removeHeader('Last-Modified');
+  
+  console.log('Headers definidos:', {
+    'Cache-Control': res.getHeader('Cache-Control'),
+    'Pragma': res.getHeader('Pragma'),
+    'Expires': res.getHeader('Expires')
+  });
+  
+  next();
+});
+
+// Middleware para interceptar respostas e remover cache
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(data) {
+    console.log('=== INTERCEPTANDO RESPOSTA ===');
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers antes:', res.getHeaders());
+    
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.removeHeader('ETag');
+    res.removeHeader('Last-Modified');
+    
+    console.log('Headers depois:', res.getHeaders());
+    
+    return originalSend.call(this, data);
+  };
+  next();
+});
+
+// Middleware para interceptar respostas e remover cache
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(data) {
+    console.log('=== INTERCEPTANDO RESPOSTA 2 ===');
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers antes:', res.getHeaders());
+    
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.removeHeader('ETag');
+    res.removeHeader('Last-Modified');
+    
+    console.log('Headers depois:', res.getHeaders());
+    
+    return originalSend.call(this, data);
+  };
+  next();
+});
+
+// Middleware para interceptar respostas e remover cache
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(data) {
+    console.log('=== INTERCEPTANDO RESPOSTA 3 ===');
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers antes:', res.getHeaders());
+    
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.removeHeader('ETag');
+    res.removeHeader('Last-Modified');
+    
+    console.log('Headers depois:', res.getHeaders());
+    
+    return originalSend.call(this, data);
+  };
+  next();
+});
+
+// Middleware para interceptar respostas e remover cache
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function(data) {
+    console.log('=== INTERCEPTANDO RESPOSTA 4 ===');
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers antes:', res.getHeaders());
+    
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.removeHeader('ETag');
+    res.removeHeader('Last-Modified');
+    
+    console.log('Headers depois:', res.getHeaders());
+    
+    return originalSend.call(this, data);
+  };
+  next();
+});
+
 // Middleware de logging de tentativas Tor
 app.use(logTorAttempts);
 

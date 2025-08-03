@@ -39,7 +39,22 @@ const authenticateToken = (req, res, next) => {
     }
 
     // Buscar usuário no banco
+    console.log('=== DEBUG AUTHENTICATE TOKEN ===');
+    console.log('Decoded token:', decoded);
+    console.log('User ID from token:', decoded.userId);
+    
     const user = User.findById(decoded.userId);
+    console.log('User found:', user ? 'YES' : 'NO');
+    
+    if (user) {
+      console.log('User details:', {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive
+      });
+    }
+    
     if (!user) {
       logger.warn('Usuário não encontrado para token', {
         userId: decoded.userId,
@@ -143,11 +158,26 @@ const authorizeAdmin = (req, res, next) => {
 
 // Middleware para auditores
 const authorizeAuditor = (req, res, next) => {
+  console.log('=== DEBUG AUTHORIZE AUDITOR ===');
+  console.log('User in request:', req.user ? 'YES' : 'NO');
+  
+  if (req.user) {
+    console.log('User details:', {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      isActive: req.user.isActive
+    });
+    console.log('canViewAudit():', req.user.canViewAudit());
+  }
+  
   if (!req.user) {
+    console.log('❌ No user in request');
     return res.status(401).json({ error: 'Autenticação necessária' });
   }
 
   if (!req.user.canViewAudit()) {
+    console.log('❌ User cannot view audit');
     logger.warn('Tentativa de acesso a auditoria sem permissão', {
       userId: req.user.id,
       email: req.user.email,
@@ -161,6 +191,7 @@ const authorizeAuditor = (req, res, next) => {
     });
   }
 
+  console.log('✅ User authorized for audit access');
   next();
 };
 

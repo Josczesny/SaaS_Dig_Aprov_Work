@@ -1771,7 +1771,7 @@ function showToast(title, message, type = 'info') {
         
         // Criar elemento toast
         const toast = document.createElement('div');
-        toast.className = `mb-4 p-4 rounded-lg shadow-lg border-l-4 transition-all duration-300 transform translate-x-full`;
+        toast.className = `mb-4 p-4 rounded-lg shadow-lg border-l-4 transition-all duration-300 transform translate-x-full z-[9999]`;
         
         // Definir cores baseadas no tipo
         let bgColor, borderColor, textColor;
@@ -2362,16 +2362,32 @@ async function exportAuditLogsCSV(startDate = null, endDate = null) {
         }
 
         console.log('Fazendo requisição para exportar CSV:', `${API_BASE_URL}/audit/export/csv?startDate=${startDate}&endDate=${endDate}`);
+        console.log('Token sendo usado:', authToken ? authToken.substring(0, 20) + '...' : 'null');
+        console.log('URL completa:', `${API_BASE_URL}/audit/export/csv?startDate=${startDate}&endDate=${endDate}`);
         const response = await fetch(`${API_BASE_URL}/audit/export/csv?startDate=${startDate}&endDate=${endDate}`, {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${authToken}`,
+                'Accept': '*/*',
+                'Cache-Control': 'no-cache'
             }
         });
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
         
         if (response.ok) {
             console.log('Resposta OK, criando blob para download');
             const blob = await response.blob();
             console.log('Blob criado:', blob.size, 'bytes');
+            console.log('Blob type:', blob.type);
+            
+            // Verificar se o blob é válido
+            if (blob.size < 50) {
+                console.error('Blob muito pequeno, possível erro na geração');
+                showToast('Erro', 'Arquivo CSV gerado está vazio ou corrompido', 'error');
+                return;
+            }
+            
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -2403,16 +2419,32 @@ async function exportAuditLogsPDF(startDate = null, endDate = null) {
         }
 
         console.log('Fazendo requisição para exportar PDF:', `${API_BASE_URL}/audit/export/pdf?startDate=${startDate}&endDate=${endDate}`);
+        console.log('Token sendo usado:', authToken ? authToken.substring(0, 20) + '...' : 'null');
+        console.log('URL completa:', `${API_BASE_URL}/audit/export/pdf?startDate=${startDate}&endDate=${endDate}`);
         const response = await fetch(`${API_BASE_URL}/audit/export/pdf?startDate=${startDate}&endDate=${endDate}`, {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${authToken}`,
+                'Accept': '*/*',
+                'Cache-Control': 'no-cache'
             }
         });
+        
+        console.log('Response status:', response.status);
+        console.log('Response headers:', Object.fromEntries(response.headers.entries()));
         
         if (response.ok) {
             console.log('Resposta OK, criando blob para download');
             const blob = await response.blob();
             console.log('Blob criado:', blob.size, 'bytes');
+            console.log('Blob type:', blob.type);
+            
+            // Verificar se o blob é válido
+            if (blob.size < 100) {
+                console.error('Blob muito pequeno, possível erro na geração');
+                showToast('Erro', 'Arquivo PDF gerado está vazio ou corrompido', 'error');
+                return;
+            }
+            
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

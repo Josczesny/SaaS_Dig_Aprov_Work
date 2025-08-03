@@ -300,17 +300,24 @@ class DatabaseService {
   }
 
   findAuditLogs(filters = {}) {
+    console.log('=== DEBUG findAuditLogs ===');
+    console.log('Filtros recebidos:', filters);
+    
     let sql = 'SELECT * FROM audit_logs WHERE 1=1';
     let params = [];
     
     if (filters.startDate) {
       sql += ' AND timestamp >= ?';
-      params.push(filters.startDate);
+      // Converter data para início do dia (00:00:00)
+      const startDateTime = filters.startDate + 'T00:00:00.000Z';
+      params.push(startDateTime);
     }
     
     if (filters.endDate) {
       sql += ' AND timestamp <= ?';
-      params.push(filters.endDate);
+      // Converter data para fim do dia (23:59:59)
+      const endDateTime = filters.endDate + 'T23:59:59.999Z';
+      params.push(endDateTime);
     }
     
     if (filters.approverId) {
@@ -324,11 +331,26 @@ class DatabaseService {
     }
     
     sql += ' ORDER BY timestamp DESC';
+    
+    console.log('SQL gerada:', sql);
+    console.log('Parâmetros:', params);
+    
     const stmt = this.db.prepare(sql);
     const logs = stmt.all(params);
     
-    // Debug para logs de exclusão
+    console.log('Total de logs encontrados:', logs.length);
+    
+    // Debug para todos os logs
     logs.forEach((log, index) => {
+      console.log(`Log ${index}:`, {
+        id: log.id,
+        approver: log.approver,
+        action: log.action,
+        timestamp: log.timestamp,
+        approvalId: log.approvalId,
+        metadata: log.metadata
+      });
+      
       if (log.action === 'deleted') {
         console.log(`Log de exclusão ${index}:`, {
           id: log.id,
@@ -391,9 +413,18 @@ class DatabaseService {
   getStats() {
     const userCount = this.db.prepare('SELECT COUNT(*) as count FROM users').get().count;
     const approvalCount = this.db.prepare('SELECT COUNT(*) as count FROM approvals').get().count;
-    const pendingCount = this.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = "pending"').get().count;
+    const pendingCount = this.db.prepare("SELECT COUNT(*) as count FROM approvals WHERE status = 'pending'").get().count;
     const auditCount = this.db.prepare('SELECT COUNT(*) as count FROM audit_logs').get().count;
     const blockedCount = this.db.prepare('SELECT COUNT(*) as count FROM blocked_ips WHERE isActive = 1').get().count;
+
+    // Debug: verificar dados de auditoria
+    console.log('=== DEBUG getStats ===');
+    console.log('Total de logs de auditoria:', auditCount);
+    
+    if (auditCount > 0) {
+      const sampleLogs = this.db.prepare('SELECT * FROM audit_logs LIMIT 5').all();
+      console.log('Amostra de logs de auditoria:', sampleLogs);
+    }
 
     return {
       users: userCount,
