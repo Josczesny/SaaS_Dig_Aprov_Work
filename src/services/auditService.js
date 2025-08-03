@@ -273,20 +273,20 @@ class AuditService {
     console.log('Gerando CSV com', logs.length, 'logs');
     console.log('Informações do período:', periodInfo);
     
-    // Cabeçalhos das colunas (usando BOM para UTF-8)
+    // Cabeçalhos das colunas melhorados (removendo redundâncias)
     const headers = [
-      'ID da Aprovacao',
-      'Tipo de Solicitacao', 
+      'ID da Aprovação',
+      'Tipo de Solicitação',
       'Solicitante',
       'Aprovador',
-      'Acao Realizada',
+      'Ação Realizada',
       'Justificativa',
       'Data/Hora',
-      'Status'
+      'Duração do Processo'
     ];
     
-    // Processar dados dos logs
-    const rows = logs.map((log, index) => {
+    // Processar dados dos logs com informações mais úteis
+    const rows = await Promise.all(logs.map(async (log, index) => {
       console.log(`Processando log ${index}:`, log);
       
       let metadata = {};
@@ -303,23 +303,75 @@ class AuditService {
 
       const deletedApproval = metadata.deletedApproval || {};
       
-      // Formatar dados para CSV
+      // Buscar o tipo real da solicitação
+      let requestType = 'N/A';
+      if (log.approvalId) {
+        try {
+          // Tentar buscar a aprovação original no banco
+          const approval = await databaseService.findApprovalById(log.approvalId);
+          if (approval && approval.type) {
+            requestType = approval.type;
+          } else if (deletedApproval.type) {
+            requestType = deletedApproval.type;
+          }
+        } catch (error) {
+          console.error(`Erro ao buscar aprovação ${log.approvalId}:`, error);
+          if (deletedApproval.type) {
+            requestType = deletedApproval.type;
+          }
+        }
+      } else if (deletedApproval.type) {
+        requestType = deletedApproval.type;
+      }
+      
+      // Calcular duração do processo se houver dados de criação
+      let processDuration = 'N/A';
+      if (metadata.createdAt && log.timestamp) {
+        const createdDate = new Date(metadata.createdAt);
+        const actionDate = new Date(log.timestamp);
+        const durationMs = actionDate - createdDate;
+        const durationHours = Math.round(durationMs / (1000 * 60 * 60));
+        const durationDays = Math.round(durationMs / (1000 * 60 * 60 * 24));
+        
+        if (durationDays > 0) {
+          processDuration = `${durationDays} dia(s)`;
+        } else if (durationHours > 0) {
+          processDuration = `${durationHours} hora(s)`;
+        } else {
+          const durationMinutes = Math.round(durationMs / (1000 * 60));
+          processDuration = `${durationMinutes} minuto(s)`;
+        }
+      }
+      
+      // Melhorar justificativa com informações mais úteis
+      let enhancedJustification = log.comment || '-';
+      if (log.action === 'deleted' && metadata.deletedApproval) {
+        enhancedJustification = `Aprovação deletada - Tipo: ${metadata.deletedApproval.type || 'N/A'}, Solicitante: ${metadata.deletedApproval.requester || 'N/A'}`;
+      } else if (log.action === 'restored' && metadata.restoredApproval) {
+        enhancedJustification = `Aprovação restaurada - Status anterior: ${metadata.restoredApproval.previousStatus || 'N/A'}`;
+      } else if (log.action === 'approved') {
+        enhancedJustification = log.comment || 'Aprovado via sistema';
+      } else if (log.action === 'rejected') {
+        enhancedJustification = log.comment || 'Rejeitado via sistema';
+      }
+      
+      // Formatar dados para CSV com informações mais úteis
       const row = [
-        log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A',
-        deletedApproval.type || log.action || 'N/A',
-        deletedApproval.requester || log.approver || 'N/A',
-        log.approver || 'N/A',
-        log.action || 'N/A',
-        log.comment || '-',
+        log.approvalId ? log.approvalId.substring(0, 12) + '...' : 'N/A',
+        this.formatRequestType(requestType),
+        this.formatEmail(deletedApproval.requester || log.approver),
+        this.formatEmail(log.approver),
+        this.formatAction(log.action),
+        enhancedJustification,
         log.timestamp ? new Date(log.timestamp).toLocaleString('pt-BR') : 'N/A',
-        log.action || 'N/A'
+        processDuration
       ];
       
       console.log(`Linha ${index} gerada:`, row);
       return row;
-    });
+    }));
 
-    // Construir conteúdo CSV (apenas dados, sem cabeçalho de relatório)
+    // Construir conteúdo CSV
     const csvLines = [
       headers.join(','),
       ...rows.map(row => row.map(field => `"${field}"`).join(','))
@@ -338,12 +390,12 @@ class AuditService {
     console.log('Gerando PDF com', logs.length, 'logs');
     console.log('Informações do período:', periodInfo);
     
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       try {
-        // Criar documento PDF
+        // Criar documento PDF com melhor formatação
         const doc = new PDFDocument({
           size: 'A4',
-          margin: 50,
+          margin: 40,
           autoFirstPage: true
         });
         
@@ -359,84 +411,98 @@ class AuditService {
           reject(error);
         });
 
-        // Cabeçalho do relatório
-        doc.fontSize(24).font('Helvetica-Bold').text('RELATÓRIO DE AUDITORIA', { align: 'center' });
-        doc.moveDown();
+        // Cabeçalho do relatório melhorado
+        doc.fontSize(20).font('Helvetica-Bold').text('RELATÓRIO DE AUDITORIA', { align: 'center' });
+        doc.moveDown(0.5);
         
-        doc.fontSize(12).font('Helvetica').text(`Data de geração: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
-        doc.fontSize(12).text(`Total de registros: ${logs.length}`, { align: 'center' });
+        // Informações de geração
+        doc.fontSize(10).font('Helvetica').text(`Data de geração: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
+        doc.fontSize(10).text(`Total de registros: ${logs.length}`, { align: 'center' });
         
         // Informações do período
         if (periodInfo) {
-          doc.moveDown();
+          doc.moveDown(0.5);
           if (periodInfo.adjusted) {
-            doc.fontSize(10).text(`Período ajustado: ${periodInfo.startDate} a ${periodInfo.endDate}`, { align: 'center' });
+            doc.fontSize(9).text(`Período ajustado: ${periodInfo.startDate} a ${periodInfo.endDate}`, { align: 'center' });
             if (periodInfo.originalStartDate || periodInfo.originalEndDate) {
-              doc.fontSize(10).text(`Período solicitado: ${periodInfo.originalStartDate || 'N/A'} a ${periodInfo.originalEndDate || 'N/A'}`, { align: 'center' });
+              doc.fontSize(9).text(`Período solicitado: ${periodInfo.originalStartDate || 'N/A'} a ${periodInfo.originalEndDate || 'N/A'}`, { align: 'center' });
             }
           } else {
-            doc.fontSize(10).text(`Período: ${periodInfo.startDate} a ${periodInfo.endDate}`, { align: 'center' });
+            doc.fontSize(9).text(`Período: ${periodInfo.startDate} a ${periodInfo.endDate}`, { align: 'center' });
           }
         }
         
-        doc.moveDown(2);
+        doc.moveDown(1);
 
         if (logs.length === 0) {
-          doc.fontSize(14).text('Nenhum log encontrado para o período selecionado.', { align: 'center' });
+          doc.fontSize(12).text('Nenhum log encontrado para o período selecionado.', { align: 'center' });
           doc.end();
           return;
         }
 
-        // Criar tabela de logs
+        // Criar tabela de logs melhorada
         const tableTop = doc.y;
-        const pageWidth = doc.page.width - 100;
-        const colWidth = pageWidth / 8;
-        const rowHeight = 20;
+        const pageWidth = doc.page.width - 80;
+        
+        // Definir larguras das colunas (removendo redundâncias)
+        const columnWidths = [
+          pageWidth * 0.15, // ID da Aprovação
+          pageWidth * 0.15, // Tipo de Solicitação
+          pageWidth * 0.18, // Solicitante
+          pageWidth * 0.18, // Aprovador
+          pageWidth * 0.12, // Ação Realizada
+          pageWidth * 0.22  // Justificativa
+        ];
+        
+        const rowHeight = 25;
+        const headerHeight = 30;
 
-        // Cabeçalhos da tabela
+        // Cabeçalhos da tabela melhorados
         const headers = [
           'ID da Aprovação',
           'Tipo de Solicitação',
           'Solicitante', 
           'Aprovador',
           'Ação Realizada',
-          'Justificativa',
-          'Data/Hora',
-          'Status'
+          'Justificativa'
         ];
 
-        // Desenhar cabeçalhos
+        // Desenhar cabeçalhos com melhor formatação
+        let currentX = 40;
         headers.forEach((header, i) => {
-          const x = 50 + (i * colWidth);
+          const x = currentX;
           const y = tableTop;
           
           // Fundo do cabeçalho
-          doc.rect(x, y, colWidth, rowHeight).fill('#f0f0f0');
+          doc.rect(x, y, columnWidths[i], headerHeight).fill('#2c3e50');
           
           // Texto do cabeçalho
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('black');
-          doc.text(header, x + 2, y + 6, { width: colWidth - 4 });
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('white');
+          doc.text(header, x + 3, y + 10, { width: columnWidths[i] - 6 });
+          
+          currentX += columnWidths[i];
         });
 
         // Linha separadora
-        doc.moveTo(50, tableTop + rowHeight).lineTo(50 + pageWidth, tableTop + rowHeight).stroke();
+        doc.moveTo(40, tableTop + headerHeight).lineTo(40 + pageWidth, tableTop + headerHeight).stroke();
 
         // Dados dos logs
-        let currentY = tableTop + rowHeight;
+        let currentY = tableTop + headerHeight;
         let pageNumber = 1;
 
-        logs.forEach((log, index) => {
+        for (let index = 0; index < logs.length; index++) {
+          const log = logs[index];
           console.log(`Processando log ${index} para PDF:`, log);
           
           // Verificar se precisa de nova página
-          if (currentY > doc.page.height - 150) {
+          if (currentY > doc.page.height - 120) {
             doc.addPage();
-            currentY = 50;
+            currentY = 40;
             pageNumber++;
             
             // Adicionar cabeçalho na nova página
-            doc.fontSize(10).text(`Página ${pageNumber}`, { align: 'center' });
-            doc.moveDown();
+            doc.fontSize(10).font('Helvetica-Bold').text(`Página ${pageNumber}`, { align: 'center' });
+            doc.moveDown(0.5);
           }
           
           let metadata = {};
@@ -453,35 +519,91 @@ class AuditService {
 
           const deletedApproval = metadata.deletedApproval || {};
           
-          // Dados da linha
+          // Buscar o tipo real da solicitação
+          let requestType = 'N/A';
+          if (log.approvalId) {
+            try {
+              // Tentar buscar a aprovação original no banco
+              const approval = await databaseService.findApprovalById(log.approvalId);
+              if (approval && approval.type) {
+                requestType = approval.type;
+              } else if (deletedApproval.type) {
+                requestType = deletedApproval.type;
+              }
+            } catch (error) {
+              console.error(`Erro ao buscar aprovação ${log.approvalId}:`, error);
+              if (deletedApproval.type) {
+                requestType = deletedApproval.type;
+              }
+            }
+          } else if (deletedApproval.type) {
+            requestType = deletedApproval.type;
+          }
+          
+          // Calcular duração do processo
+          let processDuration = 'N/A';
+          if (metadata.createdAt && log.timestamp) {
+            const createdDate = new Date(metadata.createdAt);
+            const actionDate = new Date(log.timestamp);
+            const durationMs = actionDate - createdDate;
+            const durationHours = Math.round(durationMs / (1000 * 60 * 60));
+            const durationDays = Math.round(durationMs / (1000 * 60 * 60 * 24));
+            
+            if (durationDays > 0) {
+              processDuration = `${durationDays} dia(s)`;
+            } else if (durationHours > 0) {
+              processDuration = `${durationHours} hora(s)`;
+            } else {
+              const durationMinutes = Math.round(durationMs / (1000 * 60));
+              processDuration = `${durationMinutes} minuto(s)`;
+            }
+          }
+          
+          // Melhorar justificativa
+          let enhancedJustification = log.comment || '-';
+          if (log.action === 'deleted' && metadata.deletedApproval) {
+            enhancedJustification = `Deletado - Tipo: ${metadata.deletedApproval.type || 'N/A'}`;
+          } else if (log.action === 'restored' && metadata.restoredApproval) {
+            enhancedJustification = `Restaurado - Status anterior: ${metadata.restoredApproval.previousStatus || 'N/A'}`;
+          } else if (log.action === 'approved') {
+            enhancedJustification = log.comment || 'Aprovado via sistema';
+          } else if (log.action === 'rejected') {
+            enhancedJustification = log.comment || 'Rejeitado via sistema';
+          }
+          
+          // Dados da linha melhorados
           const rowData = [
-            log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A',
-            deletedApproval.type || log.action || 'N/A',
-            deletedApproval.requester || log.approver || 'N/A',
-            log.approver || 'N/A',
-            log.action || 'N/A',
-            log.comment || '-',
-            log.timestamp ? new Date(log.timestamp).toLocaleString('pt-BR') : 'N/A',
-            log.action || 'N/A'
+            log.approvalId ? log.approvalId.substring(0, 12) + '...' : 'N/A',
+            this.formatRequestType(requestType),
+            this.formatEmail(deletedApproval.requester || log.approver),
+            this.formatEmail(log.approver),
+            this.formatAction(log.action),
+            enhancedJustification
           ];
 
           console.log(`Linha ${index} para PDF:`, rowData);
 
-          // Desenhar linha de dados
+          // Desenhar linha de dados com melhor formatação
+          currentX = 40;
           rowData.forEach((cell, i) => {
-            const x = 50 + (i * colWidth);
+            const x = currentX;
             
             // Fundo da célula (alternando cores)
-            const fillColor = index % 2 === 0 ? '#ffffff' : '#f9f9f9';
-            doc.rect(x, currentY, colWidth, rowHeight).fill(fillColor);
+            const fillColor = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+            doc.rect(x, currentY, columnWidths[i], rowHeight).fill(fillColor);
+            
+            // Borda da célula
+            doc.rect(x, currentY, columnWidths[i], rowHeight).stroke('#dee2e6');
             
             // Texto da célula
-            doc.fontSize(7).font('Helvetica').fillColor('black');
-            doc.text(cell, x + 2, currentY + 6, { width: colWidth - 4 });
+            doc.fontSize(8).font('Helvetica').fillColor('black');
+            doc.text(cell, x + 3, currentY + 8, { width: columnWidths[i] - 6 });
+            
+            currentX += columnWidths[i];
           });
 
           currentY += rowHeight;
-        });
+        }
 
         // Rodapé
         doc.fontSize(10).text(`Página ${pageNumber}`, { align: 'center' });
@@ -492,6 +614,51 @@ class AuditService {
         reject(error);
       }
     });
+  }
+
+  // Métodos auxiliares para formatação
+  formatRequestType(type) {
+    if (!type) return 'N/A';
+    
+    const typeMap = {
+      'approved': 'Aprovação',
+      'rejected': 'Rejeição',
+      'deleted': 'Exclusão',
+      'restored': 'Restauração',
+      'reimbursement': 'Reembolso',
+      'vacation': 'Férias',
+      'purchase': 'Compra',
+      'expense': 'Despesa'
+    };
+    
+    return typeMap[type] || type;
+  }
+
+  formatEmail(email) {
+    if (!email) return 'N/A';
+    
+    // Mostrar apenas o nome do usuário se for um email
+    if (email.includes('@')) {
+      const username = email.split('@')[0];
+      return username.charAt(0).toUpperCase() + username.slice(1);
+    }
+    
+    return email;
+  }
+
+  formatAction(action) {
+    if (!action) return 'N/A';
+    
+    const actionMap = {
+      'approved': 'Aprovado',
+      'rejected': 'Rejeitado',
+      'deleted': 'Deletado',
+      'restored': 'Restaurado',
+      'created': 'Criado',
+      'updated': 'Atualizado'
+    };
+    
+    return actionMap[action] || action;
   }
 
   async getAuditStats() {
