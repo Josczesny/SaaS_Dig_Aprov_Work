@@ -1,0 +1,44 @@
+# Padrões de Notificação
+
+## Contexto
+Sistema de notificações automáticas para workflows de aprovação, garantindo comunicação eficiente entre solicitantes e aprovadores.
+
+## Requisitos
+- Usar nodemailer para envio de e-mails
+- Templates HTML responsivos e acessíveis
+- Logs de envio com messageId e timestamp ISO-8601
+- Fallback para notificações não entregues
+- Suporte a múltiplos canais (e-mail, Slack, webhook)
+
+## Exemplos
+
+<example title="Notificação de aprovação válida">
+```js
+await notificationService.sendApprovalNotification({
+  id: "uuid",
+  type: "purchase",
+  requester: "user123",
+  approver: "admin@empresa.com",
+  amount: 100.50
+});
+// Resultado: E-mail enviado com template HTML
+```
+</example>
+
+<example type="invalid" title="E-mail sem template">
+```js
+await transporter.sendMail({
+  to: approver,
+  subject: "Nova aprovação",
+  text: "Você tem uma nova aprovação"
+});
+// Falha: Sem template HTML, sem logs estruturados
+```
+</example>
+
+## Templates Obrigatórios
+- Aprovação criada: Incluir link de ação e detalhes
+- Resposta recebida: Status, justificativa e timestamp
+- Lembrete pendente: Para aprovações não respondidas em 24h
+alwaysApply: true
+---

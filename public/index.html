@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Aprovações - Empresa</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="styles.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-clipboard-check me-2"></i>
+                Sistema de Aprovações
+            </a>
+            <div class="navbar-nav ms-auto" id="navbarNav">
+                <div class="nav-item" id="userInfo" style="display: none;">
+                    <span class="navbar-text me-3">
+                        <i class="fas fa-user me-1"></i>
+                        <span id="userName"></span>
+                        <span class="badge bg-light text-dark ms-2" id="userRole"></span>
+                    </span>
+                    <button class="btn btn-outline-light btn-sm" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt me-1"></i>Sair
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Login Form -->
+    <div class="container mt-5" id="loginSection">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-4">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white text-center">
+                        <h4><i class="fas fa-sign-in-alt me-2"></i>Login</h4>
+                    </div>
+                    <div class="card-body">
+                        <form id="loginForm">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Senha</label>
+                                <input type="password" class="form-control" id="password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-sign-in-alt me-2"></i>Entrar
+                            </button>
+                        </form>
+                        <div class="mt-3 text-center">
+                            <small class="text-muted">
+                                <strong>Usuários de teste:</strong><br>
+                                admin@empresa.com / Admin123!<br>
+                                maria.santos@empresa.com / Manager123!<br>
+                                joao.silva@empresa.com / User123!
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="container mt-4" id="dashboardSection" style="display: none;">
+        <div class="container-fluid">
+            <h2 class="mb-4">Sistema de Aprovações</h2>
+            
+            <!-- Campo de Busca Principal -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="searchApprovals" placeholder="Buscar por ID, tipo, valor, data, email, status, aprovador, descrição...">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="col-md-6 text-end">
+                    <!-- Botões removidos para evitar duplicação -->
+                </div>
+            </div>
+        </div>
+        <!-- Stats Cards -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title">Pendentes</h6>
+                                <h3 id="pendingCount">0</h3>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-clock fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title">Aprovadas</h6>
+                                <h3 id="approvedCount">0</h3>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-check-circle fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-danger text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title">Rejeitadas</h6>
+                                <h3 id="rejectedCount">0</h3>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-times-circle fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6 class="card-title">Total</h6>
+                                <h3 id="totalCount">0</h3>
+                            </div>
+                            <div class="align-self-center">
+                                <i class="fas fa-chart-bar fa-2x"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" id="createApprovalBtn">
+                        <i class="fas fa-plus me-2"></i>Nova Aprovação
+                    </button>
+                    <button class="btn btn-outline-secondary" id="refreshDataBtn">
+                        <i class="fas fa-sync-alt me-2"></i>Atualizar
+                    </button>
+                    <button class="btn btn-outline-info" id="auditBtn">
+                        <i class="fas fa-history me-2"></i>Logs de Auditoria
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Approvals Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Aprovações
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="id">
+                                    ID <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-sort="type">
+                                    Tipo <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-sort="amount">
+                                    Valor <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-sort="requester">
+                                    Solicitante <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-sort="approver">
+                                    Aprovador <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-sort="status">
+                                    Status <i class="fas fa-sort"></i>
+                                </th>
+                                <th class="sortable" data-sort="createdAt">
+                                    Data <i class="fas fa-sort"></i>
+                                </th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="approvalsTable">
+                            <!-- Dados serão carregados dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Approval Modal -->
+    <div class="modal fade" id="createApprovalModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-plus me-2"></i>Nova Aprovação
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createApprovalForm">
+                        <div class="mb-3">
+                            <label for="approvalType" class="form-label">Tipo</label>
+                            <select class="form-select" id="approvalType" required>
+                                <option value="">Selecione...</option>
+                                <option value="purchase">Compra</option>
+                                <option value="reimbursement">Reembolso</option>
+                                <option value="vacation">Férias</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="amountField">
+                            <label for="approvalAmount" class="form-label">Valor (R$)</label>
+                            <input type="number" class="form-control" id="approvalAmount" step="0.01" min="0">
+                        </div>
+                        <div class="mb-3">
+                            <label for="approvalApprover" class="form-label">Aprovador</label>
+                            <select class="form-select" id="approvalApprover" required>
+                                <option value="">Selecione...</option>
+                                <option value="admin@empresa.com">Administrador</option>
+                                <option value="maria.santos@empresa.com">Maria Santos (Manager)</option>
+                                <option value="ana.rodrigues@empresa.com">Ana Rodrigues (Approver)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="approvalDescription" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="approvalDescription" rows="3" required></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="createApprovalSubmitBtn">
+                        <i class="fas fa-save me-2"></i>Criar Aprovação
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Response Modal -->
+    <div class="modal fade" id="responseModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">
+                        <i class="fas fa-reply me-2"></i>Responder Aprovação
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="responseForm">
+                        <div class="mb-3">
+                            <label class="form-label">Ação</label>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-success flex-fill" id="approveBtn">
+                                    <i class="fas fa-check me-2"></i>Aprovar
+                                </button>
+                                <button type="button" class="btn btn-danger flex-fill" id="rejectBtn">
+                                    <i class="fas fa-times me-2"></i>Rejeitar
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="responseJustification" class="form-label">Justificativa</label>
+                            <textarea class="form-control" id="responseJustification" rows="3" required></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="submitResponseBtn">
+                        <i class="fas fa-paper-plane me-2"></i>Enviar Resposta
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Audit Logs Modal -->
+    <div class="modal fade" id="auditLogsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Logs de Auditoria</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Campo de Busca para Logs -->
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="searchAuditLogs" placeholder="Buscar por ID, data, aprovador, ação, comentário, dados...">
+                                <button class="btn btn-outline-secondary" type="button" id="clearAuditSearch">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <button class="btn btn-outline-primary btn-sm" id="exportCSVBtn">
+                                <i class="fas fa-download"></i> CSV
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" id="exportPDFBtn">
+                                <i class="fas fa-file-pdf"></i> PDF
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Data</th>
+                                    <th>Aprovador</th>
+                                    <th>Ação</th>
+                                    <th>Comentário</th>
+                                    <th>Tipo</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="auditLogsTable">
+                                <!-- Dados serão carregados dinamicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container position-fixed bottom-0 end-0 p-3">
+        <div id="toast" class="toast" role="alert">
+            <div class="toast-header">
+                <i class="fas fa-info-circle me-2"></i>
+                <strong class="me-auto" id="toastTitle">Notificação</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+            </div>
+            <div class="toast-body" id="toastMessage">
+                <!-- Mensagem será inserida dinamicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html> 
