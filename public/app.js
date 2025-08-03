@@ -4,6 +4,7 @@ const API_BASE_URL = 'http://localhost:3000/api';
 // Estado global
 let authToken = localStorage.getItem('authToken');
 let currentUser = null;
+let currentExportType = null; // Variável para armazenar o tipo de exportação atual
 
 
 // Variáveis de paginação para logs de auditoria
@@ -309,11 +310,17 @@ function setupEventListeners() {
     const exportPDFBtn = document.getElementById('exportPDFBtn');
     
     if (exportCSVBtn) {
-        exportCSVBtn.addEventListener('click', exportAuditLogsCSV);
+        exportCSVBtn.addEventListener('click', () => {
+            console.log('Botão CSV clicado');
+            exportAuditLogsCSV();
+        });
     }
     
     if (exportPDFBtn) {
-        exportPDFBtn.addEventListener('click', exportAuditLogsPDF);
+        exportPDFBtn.addEventListener('click', () => {
+            console.log('Botão PDF clicado');
+            exportAuditLogsPDF();
+        });
     }
     
     // Event listeners para paginação
@@ -401,48 +408,97 @@ function setupEventListeners() {
     
     // Event delegation para botões dinâmicos
     document.addEventListener('click', async function(e) {
+        // Botão de responder - verificar primeiro
+        if (e.target.closest('.response-btn')) {
+            const button = e.target.closest('.response-btn');
+            const approvalId = button.getAttribute('data-approval-id');
+            if (approvalId) {
+                e.preventDefault();
+                e.stopPropagation();
+                showResponseModal(approvalId);
+            }
+            return;
+        }
+        
         // Botão de aprovar
-        if (e.target.classList.contains('approve-btn') || e.target.closest('.approve-btn')) {
-            const button = e.target.classList.contains('approve-btn') ? e.target : e.target.closest('.approve-btn');
+        if (e.target.closest('.approve-btn')) {
+            const button = e.target.closest('.approve-btn');
             const approvalId = button.getAttribute('data-approval-id');
             if (approvalId && !window.processingApproval) {
+                e.preventDefault();
+                e.stopPropagation();
                 approveApproval(approvalId);
             }
             return;
         }
         
         // Botão de rejeitar
-        if (e.target.classList.contains('reject-btn') || e.target.closest('.reject-btn')) {
-            const button = e.target.classList.contains('reject-btn') ? e.target : e.target.closest('.reject-btn');
+        if (e.target.closest('.reject-btn')) {
+            const button = e.target.closest('.reject-btn');
             const approvalId = button.getAttribute('data-approval-id');
             if (approvalId && !window.processingApproval) {
+                e.preventDefault();
+                e.stopPropagation();
                 rejectApproval(approvalId);
             }
             return;
         }
         
         // Botão de deletar
-        if (e.target.classList.contains('delete-btn') || e.target.closest('.delete-btn')) {
-            const button = e.target.classList.contains('delete-btn') ? e.target : e.target.closest('.delete-btn');
+        if (e.target.closest('.delete-btn')) {
+            const button = e.target.closest('.delete-btn');
             const approvalId = button.getAttribute('data-approval-id');
             if (approvalId && !window.processingApproval) {
+                e.preventDefault();
+                e.stopPropagation();
                 deleteApproval(approvalId);
             }
             return;
         }
         
-        // Clicar na linha da tabela para expandir/contrair detalhes
+        // Botão de alterar nos logs de auditoria
+        if (e.target.closest('.audit-edit-btn')) {
+            const button = e.target.closest('.audit-edit-btn');
+            const approvalId = button.getAttribute('data-approval-id');
+            const action = button.getAttribute('data-action');
+            if (approvalId && action) {
+                e.preventDefault();
+                e.stopPropagation();
+                showAlterationModal(approvalId, action);
+            }
+            return;
+        }
+        
+        // Botão de recuperar nos logs de auditoria
+        if (e.target.closest('.audit-restore-btn')) {
+            const button = e.target.closest('.audit-restore-btn');
+            const approvalId = button.getAttribute('data-approval-id');
+            const deletedData = button.getAttribute('data-deleted-data');
+            
+            if (approvalId && deletedData && deletedData !== 'undefined' && deletedData.trim() !== '') {
+                try {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const deletedApproval = JSON.parse(decodeURIComponent(deletedData));
+                    await restoreApproval(approvalId, deletedApproval);
+                } catch (error) {
+                    console.error('Erro ao processar dados da aprovação deletada:', error);
+                    showToast('Erro', 'Erro ao processar dados da aprovação deletada', 'error');
+                }
+            } else {
+                showToast('Erro', 'Dados da aprovação deletada não encontrados', 'error');
+            }
+            return;
+        }
+        
+        // Clicar na linha da tabela para expandir/contrair detalhes - verificar por último
         if (e.target.closest('tr[data-approval-id]')) {
             const row = e.target.closest('tr[data-approval-id]');
             const approvalId = row.getAttribute('data-approval-id');
             
             // Não expandir se clicou em um botão
-            if (e.target.classList.contains('approve-btn') || 
-                e.target.classList.contains('reject-btn') || 
-                e.target.classList.contains('delete-btn') ||
-                e.target.classList.contains('response-btn') ||
-                e.target.closest('.approve-btn') ||
-                e.target.closest('.reject-btn') ||
+            if (e.target.closest('.approve-btn') || 
+                e.target.closest('.reject-btn') || 
                 e.target.closest('.delete-btn') ||
                 e.target.closest('.response-btn')) {
                 return;
@@ -462,50 +518,6 @@ function setupEventListeners() {
                     // Esconder a linha de detalhes atual
                     detailRow.classList.add('hidden');
                 }
-            }
-            return;
-        }
-        
-        // Botão de responder
-        if (e.target.classList.contains('response-btn') || e.target.closest('.response-btn')) {
-            const button = e.target.classList.contains('response-btn') ? e.target : e.target.closest('.response-btn');
-            const approvalId = button.getAttribute('data-approval-id');
-            console.log('Botão responder clicado:', { approvalId, button });
-            if (approvalId) {
-                showResponseModal(approvalId);
-            }
-            return;
-        }
-        
-        // Botão de alterar nos logs de auditoria
-        if (e.target.classList.contains('audit-edit-btn') || e.target.closest('.audit-edit-btn')) {
-            const button = e.target.classList.contains('audit-edit-btn') ? e.target : e.target.closest('.audit-edit-btn');
-            const approvalId = button.getAttribute('data-approval-id');
-            const action = button.getAttribute('data-action');
-            console.log('Botão alterar audit clicado:', { approvalId, action, button });
-            if (approvalId && action) {
-                showAlterationModal(approvalId, action);
-            }
-            return;
-        }
-        
-        // Botão de recuperar nos logs de auditoria
-        if (e.target.classList.contains('audit-restore-btn') || e.target.closest('.audit-restore-btn')) {
-            const button = e.target.classList.contains('audit-restore-btn') ? e.target : e.target.closest('.audit-restore-btn');
-            const approvalId = button.getAttribute('data-approval-id');
-            const deletedData = button.getAttribute('data-deleted-data');
-            console.log('Botão recuperar audit clicado:', { approvalId, deletedData, button });
-            
-            if (approvalId && deletedData && deletedData !== 'undefined' && deletedData.trim() !== '') {
-                try {
-                    const deletedApproval = JSON.parse(decodeURIComponent(deletedData));
-                    await restoreApproval(approvalId, deletedApproval);
-                } catch (error) {
-                    console.error('Erro ao processar dados da aprovação deletada:', error);
-                    showToast('Erro', 'Erro ao processar dados da aprovação deletada', 'error');
-                }
-            } else {
-                showToast('Erro', 'Dados da aprovação deletada não encontrados', 'error');
             }
             return;
         }
@@ -1509,6 +1521,16 @@ function displayAuditLogs(logs, attempts = 0) {
     logs.forEach((log, index) => {
         console.log(`Log ${index}:`, log);
         console.log('Current user:', currentUser);
+        console.log('Log structure:', {
+            id: log.approvalId,
+            type: log.type,
+            requester: log.requester,
+            approver: log.approver,
+            action: log.action,
+            comment: log.comment,
+            timestamp: log.timestamp,
+            metadata: log.metadata
+        });
         const row = document.createElement('tr');
         
         // Adicionar dados do log na linha para clique
@@ -2330,12 +2352,16 @@ function sortAuditLogs(field) {
 
 // Funções de export
 async function exportAuditLogsCSV(startDate = null, endDate = null) {
+    console.log('exportAuditLogsCSV chamada:', { startDate, endDate });
     try {
         if (!startDate || !endDate) {
+            console.log('Datas não fornecidas, abrindo modal de período');
+            currentExportType = 'csv';
             showExportPeriodModal('csv');
             return;
         }
 
+        console.log('Fazendo requisição para exportar CSV:', `${API_BASE_URL}/audit/export/csv?startDate=${startDate}&endDate=${endDate}`);
         const response = await fetch(`${API_BASE_URL}/audit/export/csv?startDate=${startDate}&endDate=${endDate}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
@@ -2343,7 +2369,9 @@ async function exportAuditLogsCSV(startDate = null, endDate = null) {
         });
         
         if (response.ok) {
+            console.log('Resposta OK, criando blob para download');
             const blob = await response.blob();
+            console.log('Blob criado:', blob.size, 'bytes');
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -2365,12 +2393,16 @@ async function exportAuditLogsCSV(startDate = null, endDate = null) {
 }
 
 async function exportAuditLogsPDF(startDate = null, endDate = null) {
+    console.log('exportAuditLogsPDF chamada:', { startDate, endDate });
     try {
         if (!startDate || !endDate) {
+            console.log('Datas não fornecidas, abrindo modal de período');
+            currentExportType = 'pdf';
             showExportPeriodModal('pdf');
             return;
         }
 
+        console.log('Fazendo requisição para exportar PDF:', `${API_BASE_URL}/audit/export/pdf?startDate=${startDate}&endDate=${endDate}`);
         const response = await fetch(`${API_BASE_URL}/audit/export/pdf?startDate=${startDate}&endDate=${endDate}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
@@ -2378,7 +2410,9 @@ async function exportAuditLogsPDF(startDate = null, endDate = null) {
         });
         
         if (response.ok) {
+            console.log('Resposta OK, criando blob para download');
             const blob = await response.blob();
+            console.log('Blob criado:', blob.size, 'bytes');
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -2756,8 +2790,6 @@ function showAuditLogDetails(log) {
 }
 
 // Funções para modal de exportação
-let currentExportType = null;
-
 function showExportPeriodModal(exportType) {
     currentExportType = exportType;
     const modal = document.getElementById('exportPeriodModal');
@@ -2779,7 +2811,7 @@ function hideExportPeriodModal() {
     if (modal) {
         modal.classList.add('hidden');
     }
-    currentExportType = null;
+    // Não zerar o currentExportType aqui, pois ainda precisamos dele
 }
 
 function setQuickDateRange(range) {
@@ -2811,8 +2843,11 @@ function setQuickDateRange(range) {
 }
 
 async function confirmExportWithPeriod() {
+    console.log('confirmExportWithPeriod chamada');
     const startDate = document.getElementById('exportStartDate').value;
     const endDate = document.getElementById('exportEndDate').value;
+    
+    console.log('Datas selecionadas:', { startDate, endDate, currentExportType });
     
     if (!startDate || !endDate) {
         showToast('Erro', 'Por favor, selecione as datas inicial e final', 'error');
@@ -2824,16 +2859,26 @@ async function confirmExportWithPeriod() {
         return;
     }
     
+    // Armazenar o tipo de exportação antes de fechar o modal
+    const exportType = currentExportType;
     hideExportPeriodModal();
     
     try {
-        if (currentExportType === 'csv') {
+        if (exportType === 'csv') {
+            console.log('Chamando exportAuditLogsCSV com datas:', { startDate, endDate });
             await exportAuditLogsCSV(startDate, endDate);
-        } else if (currentExportType === 'pdf') {
+        } else if (exportType === 'pdf') {
+            console.log('Chamando exportAuditLogsPDF com datas:', { startDate, endDate });
             await exportAuditLogsPDF(startDate, endDate);
+        } else {
+            console.error('Tipo de exportação desconhecido:', exportType);
+            showToast('Erro', `Tipo de exportação desconhecido: ${exportType}`, 'error');
         }
     } catch (error) {
         console.error('Erro na exportação:', error);
         showToast('Erro', 'Erro ao exportar dados', 'error');
+    } finally {
+        // Zerar o currentExportType após o uso
+        currentExportType = null;
     }
 }

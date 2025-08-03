@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const { auditLogger } = require('../utils/logger');
 const databaseService = require('./database');
+const PDFDocument = require('pdfkit');
 
 class AuditService {
   async createAuditLog(data) {
@@ -99,7 +100,7 @@ class AuditService {
         log.approver || 'N/A',
         log.action || 'N/A',
         log.comment || '-',
-        log.timestamp || 'N/A',
+        log.timestamp ? new Date(log.timestamp).toLocaleDateString('pt-BR') : 'N/A',
         log.action || 'N/A'
       ];
     });
@@ -112,43 +113,91 @@ class AuditService {
   }
 
   async generatePDF(logs) {
-    // Implementação básica de PDF (em produção, usar biblioteca como PDFKit)
-    const pdfContent = `
-      Relatório de Auditoria
-      ====================
-      
-      Data de geração: ${new Date().toLocaleString('pt-BR')}
-      Total de logs: ${logs.length}
-      
-      ${logs.map((log, index) => {
-        let metadata = {};
-        if (typeof log.metadata === 'string') {
-          try {
-            metadata = JSON.parse(log.metadata);
-          } catch (error) {
-            metadata = {};
-          }
-        } else {
-          metadata = log.metadata || {};
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({
+          size: 'A4',
+          margin: 50
+        });
+        const chunks = [];
+
+        doc.on('data', chunk => chunks.push(chunk));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', (error) => reject(error));
+
+        // Cabeçalho
+        doc.fontSize(20).text('Relatório de Auditoria', { align: 'center' });
+        doc.moveDown();
+        doc.fontSize(12).text(`Data de geração: ${new Date().toLocaleString('pt-BR')}`, { align: 'center' });
+        doc.fontSize(12).text(`Total de logs: ${logs.length}`, { align: 'center' });
+        doc.moveDown(2);
+
+        if (logs.length === 0) {
+          doc.fontSize(14).text('Nenhum log encontrado para o período selecionado.', { align: 'center' });
+          doc.end();
+          return;
         }
 
-        const deletedApproval = metadata.deletedApproval || {};
-        
-        return `
-        Log ${index + 1}:
-        - ID: ${log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A'}
-        - Tipo: ${deletedApproval.type || 'N/A'}
-        - Solicitante: ${deletedApproval.requester || 'N/A'}
-        - Aprovador: ${log.approver || 'N/A'}
-        - Ação: ${log.action || 'N/A'}
-        - Data: ${log.timestamp || 'N/A'}
-        - Comentário: ${log.comment || '-'}
-        - Descrição: ${deletedApproval.description || 'N/A'}
-        `;
-      }).join('\n')}
-    `;
+        // Tabela de logs
+        let yPosition = doc.y;
+        const pageWidth = doc.page.width - 100;
+        const colWidth = pageWidth / 8;
 
-    return Buffer.from(pdfContent, 'utf-8');
+        // Cabeçalhos da tabela
+        const headers = ['ID', 'Tipo', 'Solicitante', 'Aprovador', 'Status', 'Justificativa', 'Data', 'Ação'];
+        headers.forEach((header, i) => {
+          doc.fontSize(10).text(header, 50 + (i * colWidth), yPosition, { width: colWidth });
+        });
+
+        yPosition += 20;
+        doc.moveTo(50, yPosition).lineTo(50 + pageWidth, yPosition).stroke();
+        yPosition += 10;
+
+        // Dados dos logs
+        logs.forEach((log, index) => {
+          let metadata = {};
+          if (typeof log.metadata === 'string') {
+            try {
+              metadata = JSON.parse(log.metadata);
+            } catch (error) {
+              metadata = {};
+            }
+          } else {
+            metadata = log.metadata || {};
+          }
+
+          const deletedApproval = metadata.deletedApproval || {};
+          
+          const rowData = [
+            log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A',
+            deletedApproval.type || 'N/A',
+            deletedApproval.requester || 'N/A',
+            log.approver || 'N/A',
+            log.action || 'N/A',
+            log.comment || '-',
+            log.timestamp ? new Date(log.timestamp).toLocaleDateString('pt-BR') : 'N/A',
+            log.action || 'N/A'
+          ];
+
+          // Verificar se precisa de nova página
+          if (yPosition > doc.page.height - 100) {
+            doc.addPage();
+            yPosition = 50;
+          }
+
+          rowData.forEach((cell, i) => {
+            doc.fontSize(8).text(cell, 50 + (i * colWidth), yPosition, { width: colWidth });
+          });
+
+          yPosition += 15;
+        });
+
+        doc.end();
+      } catch (error) {
+        console.error('Erro ao gerar PDF:', error);
+        reject(error);
+      }
+    });
   }
 
   async getAuditStats() {

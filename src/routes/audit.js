@@ -34,16 +34,20 @@ router.get('/export/csv', authenticateToken, authorizeAuditor, apiLimiter, secur
   try {
     const { startDate, endDate } = req.query;
     
+    console.log('Exportação CSV - Parâmetros:', { startDate, endDate });
+    
     const logs = await auditService.getAuditLogs({
       startDate,
       endDate
     });
 
+    console.log('Logs encontrados para CSV:', logs.length);
+
     // Gerar CSV
     const csvContent = await auditService.generateCSV(logs);
     
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename=audit-logs-${Date.now()}.csv`);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename=audit-logs-${startDate}-to-${endDate}.csv`);
     res.send(csvContent);
 
   } catch (error) {
@@ -57,20 +61,25 @@ router.get('/export/pdf', authenticateToken, authorizeAuditor, apiLimiter, secur
   try {
     const { startDate, endDate } = req.query;
     
+    console.log('Exportação PDF - Parâmetros:', { startDate, endDate });
+    
     const logs = await auditService.getAuditLogs({
       startDate,
       endDate
     });
 
+    console.log('Logs encontrados para PDF:', logs.length);
+
     // Gerar PDF
     const pdfContent = await auditService.generatePDF(logs);
     
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=audit-logs-${Date.now()}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=audit-logs-${startDate}-to-${endDate}.pdf`);
     res.send(pdfContent);
 
   } catch (error) {
     auditLogger.error('Erro ao exportar PDF', { error: error.message });
+    console.error('Erro detalhado ao exportar PDF:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
