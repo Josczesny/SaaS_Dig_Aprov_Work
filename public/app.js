@@ -150,14 +150,14 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (approveBtn) {
         approveBtn.addEventListener('click', function() {
-            responseAction = 'approved';
+            setResponseAction('approved');
             document.getElementById('responseJustification').focus();
         });
     }
     
     if (rejectBtn) {
         rejectBtn.addEventListener('click', function() {
-            responseAction = 'rejected';
+            setResponseAction('rejected');
             document.getElementById('responseJustification').focus();
         });
     }
@@ -257,7 +257,23 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Carregar dados iniciais se estiver logado
     if (authToken) {
-        loadApprovals();
+        console.log('Token encontrado, carregando dados do usuário...');
+        loadUserInfo().then(() => {
+            if (currentUser && currentUser.email) {
+                console.log('Usuário carregado com sucesso, mostrando dashboard...');
+                showDashboard();
+                loadApprovals();
+            } else {
+                console.log('Falha ao carregar usuário, fazendo logout...');
+                logout();
+            }
+        }).catch(error => {
+            console.error('Erro ao carregar dados do usuário:', error);
+            logout();
+        });
+    } else {
+        console.log('Nenhum token encontrado, mostrando tela de login...');
+        showLogin();
     }
 });
 
@@ -358,6 +374,13 @@ function showDashboard() {
     loginSection.style.display = 'none';
     dashboardSection.style.display = 'block';
     userInfo.style.display = 'block';
+}
+
+// Mostrar tela de login
+function showLogin() {
+    loginSection.style.display = 'block';
+    dashboardSection.style.display = 'none';
+    userInfo.style.display = 'none';
 }
 
 // Carregar aprovações
@@ -750,17 +773,30 @@ async function approveApproval(approvalId) {
         if (response.ok) {
             showToast('Sucesso', 'Aprovação aprovada com sucesso!', 'success');
             
-            // Atualizar todos os dados do sistema
-            await Promise.all([
-                loadApprovals(),           // Atualizar lista de aprovações
-                updateStats(currentApprovals), // Atualizar contadores
-                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
-            ]);
+            // Atualizar dados do sistema
+            await loadApprovals();
+            await updateStats(currentApprovals);
             
-            // Se o modal de auditoria estiver aberto, recarregar os logs
+            // Se o modal de auditoria estiver aberto, atualizar apenas os dados
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal.classList.contains('show')) {
-                await showAuditLogs();
+            if (auditModal && auditModal.classList.contains('show')) {
+                console.log('Modal de auditoria aberto, atualizando dados...');
+                try {
+                    const response = await fetch(`${API_BASE_URL}/audit/logs`, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentAuditLogs = data.logs || [];
+                        updateAuditLogsDisplay();
+                        console.log('Dados dos logs atualizados com sucesso');
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar logs de auditoria:', error);
+                }
             }
         } else {
             showToast('Erro', data.error || 'Erro ao aprovar', 'error');
@@ -806,17 +842,30 @@ async function rejectApproval(approvalId) {
         if (response.ok) {
             showToast('Sucesso', 'Aprovação rejeitada com sucesso!', 'success');
             
-            // Atualizar todos os dados do sistema
-            await Promise.all([
-                loadApprovals(),           // Atualizar lista de aprovações
-                updateStats(currentApprovals), // Atualizar contadores
-                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
-            ]);
+            // Atualizar dados do sistema
+            await loadApprovals();
+            await updateStats(currentApprovals);
             
-            // Se o modal de auditoria estiver aberto, recarregar os logs
+            // Se o modal de auditoria estiver aberto, atualizar apenas os dados
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal.classList.contains('show')) {
-                await showAuditLogs();
+            if (auditModal && auditModal.classList.contains('show')) {
+                console.log('Modal de auditoria aberto, atualizando dados...');
+                try {
+                    const response = await fetch(`${API_BASE_URL}/audit/logs`, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentAuditLogs = data.logs || [];
+                        updateAuditLogsDisplay();
+                        console.log('Dados dos logs atualizados com sucesso');
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar logs de auditoria:', error);
+                }
             }
         } else {
             showToast('Erro', data.error || 'Erro ao rejeitar', 'error');
@@ -931,23 +980,42 @@ async function submitResponse() {
             const message = isUpdate ? 'Decisão alterada com sucesso!' : 'Resposta enviada com sucesso!';
             showToast('Sucesso', message, 'success');
             
+            // Remover foco do botão antes de fechar o modal
+            const submitBtn = document.getElementById('submitResponseBtn');
+            if (submitBtn) {
+                submitBtn.blur();
+            }
+            
             // Fechar modal de resposta
             const responseModal = bootstrap.Modal.getInstance(document.getElementById('responseModal'));
             if (responseModal) {
                 responseModal.hide();
             }
             
-            // Atualizar todos os dados do sistema
-            await Promise.all([
-                loadApprovals(),           // Atualizar lista de aprovações
-                updateStats(currentApprovals), // Atualizar contadores
-                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
-            ]);
+            // Atualizar dados do sistema
+            await loadApprovals();
+            await updateStats(currentApprovals);
             
-            // Se o modal de auditoria estiver aberto, recarregar os logs
+            // Se o modal de auditoria estiver aberto, atualizar apenas os dados
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal.classList.contains('show')) {
-                await showAuditLogs();
+            if (auditModal && auditModal.classList.contains('show')) {
+                console.log('Modal de auditoria aberto, atualizando dados...');
+                try {
+                    const response = await fetch(`${API_BASE_URL}/audit/logs`, {
+                        headers: {
+                            'Authorization': `Bearer ${authToken}`
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        currentAuditLogs = data.logs || [];
+                        updateAuditLogsDisplay();
+                        console.log('Dados dos logs atualizados com sucesso');
+                    }
+                } catch (error) {
+                    console.error('Erro ao atualizar logs de auditoria:', error);
+                }
             }
             
         } else {
@@ -1197,7 +1265,8 @@ async function refreshAuditLogs() {
             
             if (response.ok) {
                 const data = await response.json();
-                displayAuditLogs(data.logs || []);
+                currentAuditLogs = data.logs || [];
+                updateAuditLogsDisplay();
             }
         } catch (error) {
             console.error('Erro ao atualizar logs de auditoria:', error);
@@ -1365,60 +1434,120 @@ async function restoreApproval(approvalId, deletedApproval) {
 
 // Funções de busca
 function filterApprovals(approvals, searchTerm) {
-    console.log('filterApprovals chamada:', { searchTerm, approvalsCount: approvals.length });
+    console.log('=== DEBUG FILTRO DE APROVAÇÕES ===');
+    console.log('Termo de busca:', searchTerm);
+    console.log('Total de aprovações:', approvals.length);
     
     if (!searchTerm.trim()) {
         console.log('Termo de busca vazio, retornando todas as aprovações');
         return approvals;
     }
     
-    const term = searchTerm.toLowerCase();
-    console.log('Termo de busca normalizado:', term);
+    const term = searchTerm.toLowerCase().trim();
+    console.log('Termo normalizado:', term);
+    
+    // Mapeamento de termos de busca para tipos
+    const searchTypeMap = {
+        'reembolso': 'reimbursement',
+        'reembolsos': 'reimbursement',
+        'compra': 'purchase',
+        'compras': 'purchase',
+        'ferias': 'vacation',
+        'férias': 'vacation'
+    };
+    
+    console.log('Mapeamento de busca:', searchTypeMap);
+    console.log('Termo encontrado no mapeamento:', searchTypeMap[term]);
+    
+    // Verificar se o termo corresponde a um tipo específico
+    const expectedType = searchTypeMap[term];
+    const isTypeSpecificSearch = !!expectedType;
+    
+    console.log('É busca por tipo específico?', isTypeSpecificSearch);
     
     const filtered = approvals.filter(approval => {
-        // Buscar em todos os campos
-        const matches = (
-            // Campos básicos
-            approval.type.toLowerCase().includes(term) ||
-            approval.requester.toLowerCase().includes(term) ||
-            approval.approver.toLowerCase().includes(term) ||
-            approval.description.toLowerCase().includes(term) ||
-            approval.status.toLowerCase().includes(term) ||
+        console.log('--- Analisando aprovação ---');
+        console.log('ID:', approval.id);
+        console.log('Tipo:', approval.type);
+        console.log('Tipo traduzido:', getTypeLabel(approval.type));
+        console.log('Solicitante:', approval.requester);
+        console.log('Descrição:', approval.description);
+        
+        // Se é busca por tipo específico, verificar apenas o tipo
+        if (isTypeSpecificSearch) {
+            const typeMatch = approval.type === expectedType;
+            console.log('Tipo corresponde?', typeMatch);
             
-            // ID da aprovação
-            approval.id.toLowerCase().includes(term) ||
-            
-            // Valor (como número e como string)
-            (approval.amount && approval.amount.toString().includes(term)) ||
-            (approval.amount && `R$ ${parseFloat(approval.amount).toFixed(2)}`.toLowerCase().includes(term)) ||
-            
-            // Data formatada
-            formatDate(approval.createdAt).toLowerCase().includes(term) ||
-            approval.createdAt.toLowerCase().includes(term) ||
-            
-            // Status em português
-            getStatusLabel(approval.status).toLowerCase().includes(term) ||
-            
-            // Tipo em português
-            getTypeLabel(approval.type).toLowerCase().includes(term) ||
-            
-            // Buscar por partes do email
-            approval.requester.split('@')[0].toLowerCase().includes(term) ||
-            approval.approver.split('@')[0].toLowerCase().includes(term) ||
-            
-            // Buscar por domínio do email
-            approval.requester.split('@')[1]?.toLowerCase().includes(term) ||
-            approval.approver.split('@')[1]?.toLowerCase().includes(term)
+            if (typeMatch) {
+                console.log('✅ Aprovação encontrada por tipo específico');
+                return true;
+            } else {
+                console.log('❌ Tipo não corresponde, rejeitando');
+                return false;
+            }
+        }
+        
+        // Se não é busca por tipo específico, fazer busca geral
+        console.log('Fazendo busca geral...');
+        
+        const requesterMatch = approval.requester.toLowerCase().includes(term);
+        const approverMatch = approval.approver.toLowerCase().includes(term);
+        const descriptionMatch = approval.description.toLowerCase().includes(term);
+        const statusMatch = approval.status.toLowerCase().includes(term) ||
+                          getStatusLabel(approval.status).toLowerCase().includes(term);
+        const idMatch = approval.id.toLowerCase().includes(term);
+        
+        // Valor
+        const amountMatch = approval.amount && (
+            approval.amount.toString().includes(term) ||
+            `R$ ${parseFloat(approval.amount).toFixed(2)}`.toLowerCase().includes(term)
         );
         
+        // Data
+        const dateMatch = formatDate(approval.createdAt).toLowerCase().includes(term) ||
+                         approval.createdAt.toLowerCase().includes(term);
+        
+        // Email parts
+        const requesterEmailMatch = approval.requester.split('@')[0].toLowerCase().includes(term) ||
+                                  approval.requester.split('@')[1]?.toLowerCase().includes(term);
+        const approverEmailMatch = approval.approver.split('@')[0].toLowerCase().includes(term) ||
+                                 approval.approver.split('@')[1]?.toLowerCase().includes(term);
+        
+        const matches = requesterMatch || approverMatch || descriptionMatch || 
+                       statusMatch || idMatch || amountMatch || dateMatch || 
+                       requesterEmailMatch || approverEmailMatch;
+        
+        console.log('Resultados da busca geral:', {
+            requesterMatch,
+            approverMatch,
+            descriptionMatch,
+            statusMatch,
+            idMatch,
+            amountMatch,
+            dateMatch,
+            requesterEmailMatch,
+            approverEmailMatch,
+            matches
+        });
+        
         if (matches) {
-            console.log('Aprovação encontrada:', approval.id, approval.type, approval.requester);
+            console.log('✅ Aprovação encontrada por busca geral');
+        } else {
+            console.log('❌ Aprovação não encontrada');
         }
         
         return matches;
     });
     
+    console.log('=== RESULTADO FINAL ===');
     console.log('Aprovações filtradas:', filtered.length);
+    console.log('Aprovações encontradas:', filtered.map(a => ({
+        id: a.id,
+        type: a.type,
+        typeLabel: getTypeLabel(a.type),
+        requester: a.requester
+    })));
+    
     return filtered;
 }
 
@@ -1472,23 +1601,57 @@ function updateAuditLogsDisplay() {
 function clearModalBackdrop() {
     console.log('Limpando backdrop do modal...');
     
-    // Remover backdrop manualmente
+    // Remover foco de todos os elementos dentro de modais
+    const modalElements = document.querySelectorAll('.modal');
+    modalElements.forEach(modal => {
+        const focusedElement = modal.querySelector(':focus');
+        if (focusedElement) {
+            console.log('Removendo foco de:', focusedElement);
+            focusedElement.blur();
+        }
+    });
+    
+    // Verificar se o modal de auditoria está aberto
+    const auditModal = document.getElementById('auditLogsModal');
+    const auditModalOpen = auditModal && auditModal.classList.contains('show');
+    
+    // Remover backdrop manualmente, mas preservar se o modal de auditoria estiver aberto
     const backdrops = document.querySelectorAll('.modal-backdrop');
     backdrops.forEach(backdrop => {
+        // Se o modal de auditoria estiver aberto, não remover o backdrop
+        if (auditModalOpen) {
+            console.log('Preservando backdrop para modal de auditoria aberto');
+            return;
+        }
+        
         console.log('Removendo backdrop:', backdrop);
         backdrop.remove();
     });
     
-    // Limpar classes do body
-    document.body.classList.remove('modal-open');
-    document.body.style.overflow = '';
-    document.body.style.paddingRight = '';
+    // Limpar classes do body, mas preservar modal-open se o modal de auditoria estiver aberto
+    if (!auditModalOpen) {
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
+    } else {
+        console.log('Preservando modal-open para modal de auditoria');
+    }
     
-    // Remover atributos aria-hidden dos modais
+    // Remover atributos aria-hidden dos modais, mas preservar o modal de auditoria se estiver aberto
     const modals = document.querySelectorAll('.modal');
     modals.forEach(modal => {
         modal.removeAttribute('aria-hidden');
-        modal.style.display = 'none';
+        
+        // Não fechar o modal de auditoria se estiver aberto
+        if (modal.id === 'auditLogsModal' && modal.classList.contains('show')) {
+            console.log('Preservando modal de auditoria aberto');
+            return;
+        }
+        
+        // Para outros modais, definir display none apenas se não estiverem abertos
+        if (!modal.classList.contains('show')) {
+            modal.style.display = 'none';
+        }
     });
     
     console.log('Backdrop limpo com sucesso');
@@ -1506,6 +1669,18 @@ function fixModalAccessibility() {
             console.log('Modal fechado, limpando backdrop...');
             clearModalBackdrop();
         });
+        
+        // Listener específico para o modal de resposta
+        if (modal.id === 'responseModal') {
+            modal.addEventListener('hide.bs.modal', function() {
+                // Remover foco de todos os elementos dentro do modal antes de fechar
+                const focusedElement = this.querySelector(':focus');
+                if (focusedElement) {
+                    console.log('Removendo foco do modal de resposta:', focusedElement);
+                    focusedElement.blur();
+                }
+            });
+        }
     });
 } 
 
