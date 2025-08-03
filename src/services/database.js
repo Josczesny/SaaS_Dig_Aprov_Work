@@ -155,6 +155,16 @@ class DatabaseService {
     return stmt.all();
   }
 
+  findApprovers() {
+    const stmt = this.db.prepare(`
+      SELECT id, email, name, role, department 
+      FROM users 
+      WHERE role IN ('admin', 'manager', 'approver') AND isActive = 1 
+      ORDER BY name ASC
+    `);
+    return stmt.all();
+  }
+
   updateUser(id, updates) {
     try {
       // Filtrar campos que não devem ser atualizados diretamente

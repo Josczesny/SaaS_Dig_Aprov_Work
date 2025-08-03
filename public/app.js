@@ -4,6 +4,23 @@ const API_BASE_URL = 'http://localhost:3000/api';
 // Estado global
 let authToken = localStorage.getItem('authToken');
 let currentUser = null;
+
+
+// Variáveis de paginação para logs de auditoria
+let auditPagination = {
+    currentPage: 1,
+    pageSize: 20,
+    totalPages: 1,
+    totalItems: 0
+};
+
+// Variáveis de paginação para tabela principal
+let mainPagination = {
+    currentPage: 1,
+    pageSize: 20,
+    totalPages: 1,
+    totalItems: 0
+};
 let currentApprovals = [];
 let currentAuditLogs = [];
 let currentSort = { field: null, direction: 'asc' };
@@ -16,116 +33,278 @@ const dashboardSection = document.getElementById('dashboardSection');
 const userInfo = document.getElementById('userInfo');
 const userName = document.getElementById('userName');
 const userRole = document.getElementById('userRole');
-const auditBtn = document.getElementById('auditBtn');
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM carregado, configurando listeners...');
+    // Configurar event listeners principais
+    setupEventListeners();
     
-    // Verificar se Bootstrap está carregado
-    if (typeof bootstrap === 'undefined') {
-        console.error('Bootstrap não está carregado!');
-        return;
+    // Carregar dados iniciais se estiver logado
+    if (authToken) {
+        loadUserInfo().then(() => {
+            if (currentUser && currentUser.email) {
+                showDashboard();
+                loadApprovals();
+            } else {
+                logout();
+            }
+        }).catch(error => {
+            console.error('Erro ao carregar dados do usuário:', error);
+            logout();
+        });
+    } else {
+        showLogin();
+    }
+});
+
+// Configurar event listeners
+function setupEventListeners() {
+    const elements = {
+        loginForm: document.getElementById('loginForm'),
+        logoutBtn: document.getElementById('logoutBtn'),
+        createApprovalBtn: document.getElementById('createApprovalBtn'),
+        refreshDataBtn: document.getElementById('refreshDataBtn'),
+        auditBtn: document.getElementById('auditBtn'),
+        searchApprovals: document.getElementById('searchApprovals'),
+        clearSearch: document.getElementById('clearSearch'),
+        searchAuditLogs: document.getElementById('searchAuditLogs'),
+        clearAuditSearch: document.getElementById('clearAuditSearch'),
+        createApprovalSubmitBtn: document.getElementById('createApprovalSubmitBtn'),
+        approveBtn: document.getElementById('approveBtn'),
+        rejectBtn: document.getElementById('rejectBtn'),
+        submitResponseBtn: document.getElementById('submitResponseBtn'),
+        approvalType: document.getElementById('approvalType'),
+        // Novos botões de fechar modais
+        closeCreateModal: document.getElementById('closeCreateModal'),
+        cancelCreateModal: document.getElementById('cancelCreateModal'),
+        closeResponseModal: document.getElementById('closeResponseModal'),
+        cancelResponseModal: document.getElementById('cancelResponseModal'),
+        closeAuditModal: document.getElementById('closeAuditModal'),
+        closeAuditModalBtn: document.getElementById('closeAuditModalBtn'),
+        // Novos modais
+        closeRestoreModal: document.getElementById('closeRestoreModal'),
+        cancelRestoreModal: document.getElementById('cancelRestoreModal'),
+        confirmRestoreModal: document.getElementById('confirmRestoreModal'),
+        closeAlterationModal: document.getElementById('closeAlterationModal'),
+        cancelAlterationModal: document.getElementById('cancelAlterationModal'),
+        confirmAlterationModal: document.getElementById('confirmAlterationModal'),
+        alterApproveBtn: document.getElementById('alterApproveBtn'),
+        alterRejectBtn: document.getElementById('alterRejectBtn'),
+        // Novos modais
+        closeDeleteModal: document.getElementById('closeDeleteModal'),
+        cancelDeleteModal: document.getElementById('cancelDeleteModal'),
+        confirmDeleteModal: document.getElementById('confirmDeleteModal'),
+        closeDetailsModal: document.getElementById('closeDetailsModal'),
+        closeDetailsModalBtn: document.getElementById('closeDetailsModalBtn')
+    };
+    
+    // Event listeners para novos modais
+    if (elements.closeDeleteModal) {
+        elements.closeDeleteModal.addEventListener('click', hideDeleteConfirmationModal);
     }
     
-    // Configurar acessibilidade dos modais
-    fixModalAccessibility();
-    
-    // Listener global para limpeza do backdrop
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('modal-backdrop') || 
-            (e.target.classList.contains('modal') && e.target.classList.contains('fade'))) {
-            console.log('Clique no backdrop detectado, limpando...');
-            clearModalBackdrop();
-        }
-    });
-    
-    // Listener para tecla ESC
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            console.log('ESC pressionado, limpando backdrop...');
-            setTimeout(clearModalBackdrop, 100);
-        }
-    });
-    
-    // Elementos principais
-    const loginForm = document.getElementById('loginForm');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const createApprovalBtn = document.getElementById('createApprovalBtn');
-    const refreshDataBtn = document.getElementById('refreshDataBtn');
-    const auditBtn = document.getElementById('auditBtn');
-    
-    console.log('Elementos principais encontrados:', {
-        loginForm: !!loginForm,
-        logoutBtn: !!logoutBtn,
-        createApprovalBtn: !!createApprovalBtn,
-        refreshDataBtn: !!refreshDataBtn,
-        auditBtn: !!auditBtn
-    });
-    
-    // Event listeners para elementos principais
-    if (loginForm) {
-        loginForm.addEventListener('submit', handleLogin);
-        console.log('Event listener para loginForm adicionado');
+    if (elements.cancelDeleteModal) {
+        elements.cancelDeleteModal.addEventListener('click', hideDeleteConfirmationModal);
     }
     
-    if (logoutBtn) {
-        logoutBtn.addEventListener('click', logout);
-        console.log('Event listener para logoutBtn adicionado');
+    if (elements.confirmDeleteModal) {
+        elements.confirmDeleteModal.addEventListener('click', confirmDeleteApproval);
     }
     
-    if (createApprovalBtn) {
-        createApprovalBtn.addEventListener('click', showCreateApprovalModal);
-        console.log('Event listener para createApprovalBtn adicionado');
+    if (elements.closeDetailsModal) {
+        elements.closeDetailsModal.addEventListener('click', hideApprovalDetailsModal);
     }
     
-    if (refreshDataBtn) {
-        refreshDataBtn.addEventListener('click', loadApprovals);
-        console.log('Event listener para refreshDataBtn adicionado');
+        if (elements.closeDetailsModalBtn) {
+        elements.closeDetailsModalBtn.addEventListener('click', hideApprovalDetailsModal);
     }
     
-    if (auditBtn) {
-        auditBtn.addEventListener('click', showAuditLogs);
-        console.log('Event listener para auditBtn adicionado');
+    // Event listeners principais
+    if (elements.loginForm) {
+        elements.loginForm.addEventListener('submit', handleLogin);
     }
     
-    // Event listeners para campos de busca
-    const searchApprovals = document.getElementById('searchApprovals');
-    const clearSearch = document.getElementById('clearSearch');
-    const searchAuditLogs = document.getElementById('searchAuditLogs');
-    const clearAuditSearch = document.getElementById('clearAuditSearch');
+    if (elements.logoutBtn) {
+        elements.logoutBtn.addEventListener('click', logout);
+    }
     
-    if (searchApprovals) {
-        searchApprovals.addEventListener('input', function() {
+    if (elements.createApprovalBtn) {
+        elements.createApprovalBtn.addEventListener('click', showCreateApprovalModal);
+    }
+    
+    if (elements.refreshDataBtn) {
+        elements.refreshDataBtn.addEventListener('click', loadApprovals);
+    }
+    
+    if (elements.auditBtn) {
+        elements.auditBtn.addEventListener('click', showAuditLogs);
+    }
+    
+    // Event listeners para busca
+    if (elements.searchApprovals) {
+        elements.searchApprovals.addEventListener('input', function() {
             searchTerm = this.value;
             updateApprovalsDisplay();
         });
     }
     
-    if (clearSearch) {
-        clearSearch.addEventListener('click', function() {
-            searchApprovals.value = '';
+    if (elements.clearSearch) {
+        elements.clearSearch.addEventListener('click', function() {
             searchTerm = '';
+            if (elements.searchApprovals) elements.searchApprovals.value = '';
             updateApprovalsDisplay();
         });
     }
     
-    if (searchAuditLogs) {
-        searchAuditLogs.addEventListener('input', function() {
+    if (elements.searchAuditLogs) {
+        elements.searchAuditLogs.addEventListener('input', function() {
             auditSearchTerm = this.value;
             updateAuditLogsDisplay();
         });
     }
     
-    if (clearAuditSearch) {
-        clearAuditSearch.addEventListener('click', function() {
-            searchAuditLogs.value = '';
+    if (elements.clearAuditSearch) {
+        elements.clearAuditSearch.addEventListener('click', function() {
             auditSearchTerm = '';
+            if (elements.searchAuditLogs) elements.searchAuditLogs.value = '';
             updateAuditLogsDisplay();
         });
     }
     
-    // Event listeners para botões de exportação
+    // Event listeners para modais
+    if (elements.createApprovalSubmitBtn) {
+        elements.createApprovalSubmitBtn.addEventListener('click', createApproval);
+    }
+    
+    if (elements.approveBtn) {
+        elements.approveBtn.addEventListener('click', () => setResponseAction('approved'));
+    }
+    
+    if (elements.rejectBtn) {
+        elements.rejectBtn.addEventListener('click', () => setResponseAction('rejected'));
+    }
+    
+    if (elements.submitResponseBtn) {
+        elements.submitResponseBtn.addEventListener('click', submitResponse);
+    }
+    
+    if (elements.approvalType) {
+        elements.approvalType.addEventListener('change', handleApprovalTypeChange);
+    }
+    
+    // Event listeners para fechar modais
+    if (elements.closeCreateModal) {
+        elements.closeCreateModal.addEventListener('click', hideCreateApprovalModal);
+    }
+    
+    if (elements.cancelCreateModal) {
+        elements.cancelCreateModal.addEventListener('click', hideCreateApprovalModal);
+    }
+    
+    if (elements.closeResponseModal) {
+        elements.closeResponseModal.addEventListener('click', hideResponseModal);
+    }
+    
+    if (elements.cancelResponseModal) {
+        elements.cancelResponseModal.addEventListener('click', hideResponseModal);
+    }
+    
+    if (elements.closeAuditModal) {
+        elements.closeAuditModal.addEventListener('click', hideAuditLogsModal);
+    }
+    
+    if (elements.closeAuditModalBtn) {
+        elements.closeAuditModalBtn.addEventListener('click', hideAuditLogsModal);
+    }
+    
+    // Event listeners para novos modais
+    if (elements.closeRestoreModal) {
+        elements.closeRestoreModal.addEventListener('click', hideRestoreConfirmationModal);
+    }
+    
+    if (elements.cancelRestoreModal) {
+        elements.cancelRestoreModal.addEventListener('click', hideRestoreConfirmationModal);
+    }
+    
+    if (elements.confirmRestoreModal) {
+        elements.confirmRestoreModal.addEventListener('click', confirmRestoreApproval);
+    }
+    
+    if (elements.closeAlterationModal) {
+        elements.closeAlterationModal.addEventListener('click', hideAlterationModal);
+    }
+    
+    if (elements.cancelAlterationModal) {
+        elements.cancelAlterationModal.addEventListener('click', hideAlterationModal);
+    }
+    
+    if (elements.confirmAlterationModal) {
+        elements.confirmAlterationModal.addEventListener('click', confirmAlteration);
+    }
+    
+    if (elements.alterApproveBtn) {
+        elements.alterApproveBtn.addEventListener('click', () => {
+            setAlterationAction('approved');
+            console.log('Botão aprovar clicado');
+        });
+    }
+    
+    if (elements.alterRejectBtn) {
+        elements.alterRejectBtn.addEventListener('click', () => {
+            setAlterationAction('rejected');
+            console.log('Botão rejeitar clicado');
+        });
+    }
+    
+    // Event listener global para fechar modais com ESC
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            // Verificar qual modal está aberto e fechá-lo
+            const modals = [
+                { id: 'createApprovalModal', hideFunc: hideCreateApprovalModal },
+                { id: 'responseModal', hideFunc: hideResponseModal },
+                { id: 'auditLogsModal', hideFunc: hideAuditLogsModal },
+                { id: 'restoreConfirmationModal', hideFunc: hideRestoreConfirmationModal },
+                { id: 'alterationModal', hideFunc: hideAlterationModal },
+                { id: 'deleteConfirmationModal', hideFunc: hideDeleteConfirmationModal },
+                { id: 'approvalDetailsModal', hideFunc: hideApprovalDetailsModal }
+            ];
+            
+            for (const modal of modals) {
+                const modalElement = document.getElementById(modal.id);
+                if (modalElement && !modalElement.classList.contains('hidden')) {
+                    modal.hideFunc();
+                    break; // Fechar apenas o primeiro modal encontrado
+                }
+            }
+        }
+    });
+    
+    // Event listener global para fechar modais clicando fora
+    document.addEventListener('click', function(event) {
+        const modals = [
+            { id: 'createApprovalModal', hideFunc: hideCreateApprovalModal },
+            { id: 'responseModal', hideFunc: hideResponseModal },
+            { id: 'auditLogsModal', hideFunc: hideAuditLogsModal },
+            { id: 'restoreConfirmationModal', hideFunc: hideRestoreConfirmationModal },
+            { id: 'alterationModal', hideFunc: hideAlterationModal },
+            { id: 'deleteConfirmationModal', hideFunc: hideDeleteConfirmationModal },
+            { id: 'approvalDetailsModal', hideFunc: hideApprovalDetailsModal }
+        ];
+        
+        for (const modal of modals) {
+            const modalElement = document.getElementById(modal.id);
+            if (modalElement && !modalElement.classList.contains('hidden')) {
+                const modalContent = modalElement.querySelector('div > div');
+                if (event.target === modalElement && !modalContent.contains(event.target)) {
+                    modal.hideFunc();
+                    break;
+                }
+            }
+        }
+    });
+    
+    // Event listeners para exportação
     const exportCSVBtn = document.getElementById('exportCSVBtn');
     const exportPDFBtn = document.getElementById('exportPDFBtn');
     
@@ -137,40 +316,88 @@ document.addEventListener('DOMContentLoaded', function() {
         exportPDFBtn.addEventListener('click', exportAuditLogsPDF);
     }
     
-    // Event listeners para modais
-    const createApprovalSubmitBtn = document.getElementById('createApprovalSubmitBtn');
-    const approveBtn = document.getElementById('approveBtn');
-    const rejectBtn = document.getElementById('rejectBtn');
-    const submitResponseBtn = document.getElementById('submitResponseBtn');
-    const approvalType = document.getElementById('approvalType');
+    // Event listeners para paginação
+    const pageSizeSelect = document.getElementById('pageSizeSelect');
+    const prevPageBtn = document.getElementById('prevPageBtn');
+    const nextPageBtn = document.getElementById('nextPageBtn');
     
-    if (createApprovalSubmitBtn) {
-        createApprovalSubmitBtn.addEventListener('click', createApproval);
-    }
-    
-    if (approveBtn) {
-        approveBtn.addEventListener('click', function() {
-            setResponseAction('approved');
-            document.getElementById('responseJustification').focus();
+    if (pageSizeSelect) {
+        pageSizeSelect.addEventListener('change', (e) => {
+            changeAuditPageSize(e.target.value);
         });
     }
     
-    if (rejectBtn) {
-        rejectBtn.addEventListener('click', function() {
-            setResponseAction('rejected');
-            document.getElementById('responseJustification').focus();
+    if (prevPageBtn) {
+        prevPageBtn.addEventListener('click', () => {
+            goToAuditPage(auditPagination.currentPage - 1);
         });
     }
     
-    if (submitResponseBtn) {
-        submitResponseBtn.addEventListener('click', submitResponse);
+    if (nextPageBtn) {
+        nextPageBtn.addEventListener('click', () => {
+            goToAuditPage(auditPagination.currentPage + 1);
+        });
     }
     
-    if (approvalType) {
-        approvalType.addEventListener('change', handleApprovalTypeChange);
+    // Event listeners para paginação da tabela principal
+    const mainPageSizeSelect = document.getElementById('mainPageSizeSelect');
+    const mainPrevPageBtn = document.getElementById('mainPrevPageBtn');
+    const mainNextPageBtn = document.getElementById('mainNextPageBtn');
+    
+    if (mainPageSizeSelect) {
+        mainPageSizeSelect.addEventListener('change', (e) => {
+            changeMainPageSize(e.target.value);
+        });
     }
     
-    console.log('Listeners configurados com sucesso');
+    if (mainPrevPageBtn) {
+        mainPrevPageBtn.addEventListener('click', () => {
+            goToMainPage(mainPagination.currentPage - 1);
+        });
+    }
+    
+    if (mainNextPageBtn) {
+        mainNextPageBtn.addEventListener('click', () => {
+            goToMainPage(mainPagination.currentPage + 1);
+        });
+    }
+    
+    // Event listeners para modal de exportação
+    const closeExportPeriodModal = document.getElementById('closeExportPeriodModal');
+    const cancelExportPeriod = document.getElementById('cancelExportPeriod');
+    const confirmExportPeriod = document.getElementById('confirmExportPeriod');
+    const quickLastWeek = document.getElementById('quickLastWeek');
+    const quickLastMonth = document.getElementById('quickLastMonth');
+    const quickLastYear = document.getElementById('quickLastYear');
+    const quickAll = document.getElementById('quickAll');
+    
+    if (closeExportPeriodModal) {
+        closeExportPeriodModal.addEventListener('click', hideExportPeriodModal);
+    }
+    
+    if (cancelExportPeriod) {
+        cancelExportPeriod.addEventListener('click', hideExportPeriodModal);
+    }
+    
+    if (confirmExportPeriod) {
+        confirmExportPeriod.addEventListener('click', confirmExportWithPeriod);
+    }
+    
+    if (quickLastWeek) {
+        quickLastWeek.addEventListener('click', () => setQuickDateRange('week'));
+    }
+    
+    if (quickLastMonth) {
+        quickLastMonth.addEventListener('click', () => setQuickDateRange('month'));
+    }
+    
+    if (quickLastYear) {
+        quickLastYear.addEventListener('click', () => setQuickDateRange('year'));
+    }
+    
+    if (quickAll) {
+        quickAll.addEventListener('click', () => setQuickDateRange('all'));
+    }
     
     // Event delegation para botões dinâmicos
     document.addEventListener('click', async function(e) {
@@ -204,10 +431,46 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Clicar na linha da tabela para expandir/contrair detalhes
+        if (e.target.closest('tr[data-approval-id]')) {
+            const row = e.target.closest('tr[data-approval-id]');
+            const approvalId = row.getAttribute('data-approval-id');
+            
+            // Não expandir se clicou em um botão
+            if (e.target.classList.contains('approve-btn') || 
+                e.target.classList.contains('reject-btn') || 
+                e.target.classList.contains('delete-btn') ||
+                e.target.classList.contains('response-btn') ||
+                e.target.closest('.approve-btn') ||
+                e.target.closest('.reject-btn') ||
+                e.target.closest('.delete-btn') ||
+                e.target.closest('.response-btn')) {
+                return;
+            }
+            
+            // Toggle da linha de detalhes
+            const detailRow = document.getElementById(`detail-${approvalId}`);
+            if (detailRow) {
+                if (detailRow.classList.contains('hidden')) {
+                    // Esconder todas as outras linhas de detalhes
+                    document.querySelectorAll('tr[id^="detail-"]').forEach(detail => {
+                        detail.classList.add('hidden');
+                    });
+                    // Mostrar a linha de detalhes atual
+                    detailRow.classList.remove('hidden');
+                } else {
+                    // Esconder a linha de detalhes atual
+                    detailRow.classList.add('hidden');
+                }
+            }
+            return;
+        }
+        
         // Botão de responder
         if (e.target.classList.contains('response-btn') || e.target.closest('.response-btn')) {
             const button = e.target.classList.contains('response-btn') ? e.target : e.target.closest('.response-btn');
             const approvalId = button.getAttribute('data-approval-id');
+            console.log('Botão responder clicado:', { approvalId, button });
             if (approvalId) {
                 showResponseModal(approvalId);
             }
@@ -218,8 +481,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (e.target.classList.contains('audit-edit-btn') || e.target.closest('.audit-edit-btn')) {
             const button = e.target.classList.contains('audit-edit-btn') ? e.target : e.target.closest('.audit-edit-btn');
             const approvalId = button.getAttribute('data-approval-id');
-            if (approvalId) {
-                await showResponseModal(approvalId);
+            const action = button.getAttribute('data-action');
+            console.log('Botão alterar audit clicado:', { approvalId, action, button });
+            if (approvalId && action) {
+                showAlterationModal(approvalId, action);
             }
             return;
         }
@@ -229,6 +494,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const button = e.target.classList.contains('audit-restore-btn') ? e.target : e.target.closest('.audit-restore-btn');
             const approvalId = button.getAttribute('data-approval-id');
             const deletedData = button.getAttribute('data-deleted-data');
+            console.log('Botão recuperar audit clicado:', { approvalId, deletedData, button });
             
             if (approvalId && deletedData && deletedData !== 'undefined' && deletedData.trim() !== '') {
                 try {
@@ -244,38 +510,83 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Cabeçalhos ordenáveis
+        // Clique na linha dos logs de auditoria para mostrar detalhes
+        if (e.target.closest('#auditLogsTable tr') && !e.target.closest('button')) {
+            const row = e.target.closest('tr');
+            const approvalId = row.getAttribute('data-approval-id');
+            const logData = row.getAttribute('data-log');
+            
+            if (approvalId && logData) {
+                try {
+                    const log = JSON.parse(decodeURIComponent(logData));
+                    showAuditLogDetails(log);
+                } catch (error) {
+                    console.error('Erro ao processar dados do log:', error);
+                }
+            }
+            return;
+        }
+        
+        // Cabeçalhos ordenáveis da tabela principal
         if (e.target.classList.contains('sortable') || e.target.closest('.sortable')) {
             const sortableHeader = e.target.classList.contains('sortable') ? e.target : e.target.closest('.sortable');
             const field = sortableHeader.dataset.sort;
             if (field) {
-                sortApprovals(field);
+                // Verificar se está na tabela de logs de auditoria
+                const auditTable = document.getElementById('auditLogsTable');
+                if (auditTable && auditTable.contains(sortableHeader)) {
+                    sortAuditLogs(field);
+                } else {
+                    sortApprovals(field);
+                }
             }
             return;
         }
     });
+}
+
+// Funções para modais Tailwind
+async function showCreateApprovalModal() {
+    const modal = document.getElementById('createApprovalModal');
+    const form = document.getElementById('createApprovalForm');
+    const amountField = document.getElementById('amount');
+    const approverSelect = document.getElementById('approver');
     
-    // Carregar dados iniciais se estiver logado
-    if (authToken) {
-        console.log('Token encontrado, carregando dados do usuário...');
-        loadUserInfo().then(() => {
-            if (currentUser && currentUser.email) {
-                console.log('Usuário carregado com sucesso, mostrando dashboard...');
-                showDashboard();
-                loadApprovals();
-            } else {
-                console.log('Falha ao carregar usuário, fazendo logout...');
-                logout();
-            }
-        }).catch(error => {
-            console.error('Erro ao carregar dados do usuário:', error);
-            logout();
-        });
-    } else {
-        console.log('Nenhum token encontrado, mostrando tela de login...');
-        showLogin();
+    if (form) form.reset();
+    if (amountField) amountField.style.display = 'block';
+    
+    // Carregar aprovadores
+    await loadApprovers();
+    
+    modal.classList.remove('hidden');
+}
+
+function hideCreateApprovalModal() {
+    const modal = document.getElementById('createApprovalModal');
+    modal.classList.add('hidden');
+}
+
+
+
+function hideResponseModal() {
+    const modal = document.getElementById('responseModal');
+    modal.classList.add('hidden');
+}
+
+function showAuditLogsModal() {
+    const modal = document.getElementById('auditLogsModal');
+    modal.classList.remove('hidden');
+    
+    // Carregar logs de auditoria
+    loadAuditLogs();
+}
+
+function hideAuditLogsModal() {
+    const modal = document.getElementById('auditLogsModal');
+    if (modal) {
+        modal.classList.add('hidden');
     }
-});
+}
 
 // Função de login
 async function handleLogin(event) {
@@ -396,7 +707,17 @@ async function loadApprovals() {
         if (response.ok) {
             const data = await response.json();
             currentApprovals = data.approvals || [];
-            updateApprovalsDisplay();
+            
+            console.log('Aprovações carregadas:', currentApprovals.length);
+            
+            // Resetar paginação
+            mainPagination.currentPage = 1;
+            updateMainPagination();
+            
+            // Exibir aprovações paginadas
+            const paginatedApprovals = getPaginatedMainApprovals();
+            console.log('Aprovações paginadas:', paginatedApprovals.length, 'de', currentApprovals.length);
+            displayApprovals(paginatedApprovals);
             updateStats(currentApprovals);
         } else {
             console.error('Erro ao carregar aprovações:', response.status);
@@ -412,7 +733,7 @@ async function loadApprovals() {
 
 // Exibir aprovações na tabela
 function displayApprovals(approvals) {
-    const tbody = document.getElementById('approvalsTable');
+    const tbody = document.getElementById('approvalsTableBody');
     tbody.innerHTML = '';
     
     if (approvals.length === 0) {
@@ -429,38 +750,72 @@ function displayApprovals(approvals) {
     
     approvals.forEach(approval => {
         const row = document.createElement('tr');
+        row.setAttribute('data-approval-id', approval.id);
+        row.classList.add('hover:bg-gray-50', 'cursor-pointer', 'transition-colors');
+        
+        // Adicionar linha de detalhes expansível
+        const detailRow = document.createElement('tr');
+        detailRow.id = `detail-${approval.id}`;
+        detailRow.classList.add('hidden', 'bg-gray-50');
+        detailRow.innerHTML = `
+            <td colspan="8" class="px-6 py-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="space-y-2">
+                        <div><strong>Tipo:</strong> ${getTypeLabel(approval.type)}</div>
+                        <div><strong>Solicitante:</strong> ${approval.requester}</div>
+                        <div><strong>Aprovador:</strong> ${approval.approver}</div>
+                        <div><strong>Status:</strong> <span class="${getStatusClass(approval.status)}">${getStatusLabel(approval.status)}</span></div>
+                    </div>
+                    <div class="space-y-2">
+                        <div><strong>Valor:</strong> ${approval.amount ? `R$ ${parseFloat(approval.amount).toFixed(2)}` : 'N/A'}</div>
+                        <div><strong>Data de Criação:</strong> ${formatDate(approval.createdAt)}</div>
+                        <div><strong>Última Atualização:</strong> ${formatDate(approval.updatedAt)}</div>
+                        ${approval.responseBy ? `<div><strong>Respondido por:</strong> ${approval.responseBy}</div>` : ''}
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <div><strong>Descrição:</strong></div>
+                    <p class="text-sm text-gray-700 mt-1">${approval.description}</p>
+                    ${approval.justification ? `
+                        <div class="mt-2"><strong>Justificativa:</strong></div>
+                        <p class="text-sm text-gray-700 mt-1">${approval.justification}</p>
+                    ` : ''}
+                </div>
+            </td>
+        `;
         row.innerHTML = `
             <td><small class="text-muted">${approval.id ? approval.id.substring(0, 8) + '...' : 'N/A'}</small></td>
             <td>
-                <span class="badge bg-secondary">${getTypeLabel(approval.type)}</span>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">${getTypeLabel(approval.type)}</span>
             </td>
-            <td>${approval.amount ? `R$ ${parseFloat(approval.amount).toFixed(2)}` : '-'}</td>
             <td>${approval.requester || 'N/A'}</td>
             <td>${approval.approver || 'N/A'}</td>
+            <td>${approval.amount ? `R$ ${parseFloat(approval.amount).toFixed(2)}` : '-'}</td>
             <td>
-                <span class="badge badge-${getStatusClass(approval.status)}">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusClass(approval.status)}">
                     ${getStatusLabel(approval.status)}
                 </span>
             </td>
-            <td><small>${formatDate(approval.createdAt)}</small></td>
+            <td><small class="text-gray-500">${formatDate(approval.createdAt)}</small></td>
             <td>
-                <div class="btn-group btn-group-sm" role="group">
-                    <button class="btn btn-outline-success approve-btn" data-approval-id="${approval.id}" title="Aprovar">
+                <div class="flex space-x-1">
+                    <button class="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors approve-btn" data-approval-id="${approval.id}" title="Aprovar">
                         <i class="fas fa-check"></i>
                     </button>
-                    <button class="btn btn-outline-danger reject-btn" data-approval-id="${approval.id}" title="Rejeitar">
+                    <button class="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors reject-btn" data-approval-id="${approval.id}" title="Rejeitar">
                         <i class="fas fa-times"></i>
                     </button>
-                    <button class="btn btn-outline-primary response-btn" data-approval-id="${approval.id}" title="Responder">
+                    <button class="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors response-btn" data-approval-id="${approval.id}" title="Responder">
                         <i class="fas fa-reply"></i>
                     </button>
-                    <button class="btn btn-outline-warning delete-btn" data-approval-id="${approval.id}" title="Deletar">
+                    <button class="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-yellow-300 text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors delete-btn" data-approval-id="${approval.id}" title="Deletar">
                         <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </td>
         `;
         tbody.appendChild(row);
+        tbody.appendChild(detailRow);
     });
 }
 
@@ -476,9 +831,13 @@ function sortApprovals(field) {
             currentSort.direction = 'asc';
             currentSort.clicks = 0;
             
-            // Limpar todos os ícones
+            // Limpar todos os ícones e resetar para estado original
             document.querySelectorAll('.sortable').forEach(th => {
-                th.classList.remove('asc', 'desc');
+                th.classList.remove('asc', 'desc', 'bg-blue-50', 'text-blue-700');
+                const icon = th.querySelector('i');
+                if (icon) {
+                    icon.className = 'fas fa-sort ml-1';
+                }
             });
             
             // Retornar ao estado original
@@ -497,9 +856,21 @@ function sortApprovals(field) {
     
     // Atualizar ícones dos cabeçalhos
     document.querySelectorAll('.sortable').forEach(th => {
-        th.classList.remove('asc', 'desc');
+        th.classList.remove('asc', 'desc', 'bg-blue-50', 'text-blue-700');
+        const icon = th.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-sort ml-1';
+        }
+        
         if (th.dataset.sort === field) {
-            th.classList.add(currentSort.direction);
+            th.classList.add(currentSort.direction, 'bg-blue-50', 'text-blue-700');
+            if (icon) {
+                if (currentSort.direction === 'asc') {
+                    icon.className = 'fas fa-sort-up ml-1';
+                } else {
+                    icon.className = 'fas fa-sort-down ml-1';
+                }
+            }
         }
     });
     
@@ -547,10 +918,34 @@ async function updateStats(approvals) {
             const rejected = allApprovals.filter(a => a.status === 'rejected').length;
             const total = allApprovals.length;
             
-            document.getElementById('pendingCount').textContent = pending;
-            document.getElementById('approvedCount').textContent = approved;
-            document.getElementById('rejectedCount').textContent = rejected;
-            document.getElementById('totalCount').textContent = total;
+            const pendingElement = document.getElementById('pendingCount');
+            const approvedElement = document.getElementById('approvedCount');
+            const rejectedElement = document.getElementById('rejectedCount');
+            const deletedElement = document.getElementById('deletedCount');
+            
+            if (pendingElement) pendingElement.textContent = pending;
+            if (approvedElement) approvedElement.textContent = approved;
+            if (rejectedElement) rejectedElement.textContent = rejected;
+            
+            // Buscar aprovações deletadas dos logs de auditoria
+            try {
+                const auditResponse = await fetch(`${API_BASE_URL}/audit/logs`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (auditResponse.ok) {
+                    const auditData = await auditResponse.json();
+                    const deletedLogs = auditData.logs.filter(log => log.action === 'deleted');
+                    if (deletedElement) deletedElement.textContent = deletedLogs.length;
+                } else {
+                    if (deletedElement) deletedElement.textContent = '0';
+                }
+            } catch (error) {
+                console.error('Erro ao buscar logs de auditoria para contador:', error);
+                if (deletedElement) deletedElement.textContent = '0';
+            }
             
             console.log('Estatísticas atualizadas:', { pending, approved, rejected, total });
         }
@@ -562,30 +957,33 @@ async function updateStats(approvals) {
         const rejected = approvals.filter(a => a.status === 'rejected').length;
         const total = approvals.length;
         
-        document.getElementById('pendingCount').textContent = pending;
-        document.getElementById('approvedCount').textContent = approved;
-        document.getElementById('rejectedCount').textContent = rejected;
-        document.getElementById('totalCount').textContent = total;
+        const pendingElement = document.getElementById('pendingCount');
+        const approvedElement = document.getElementById('approvedCount');
+        const rejectedElement = document.getElementById('rejectedCount');
+        const deletedElement = document.getElementById('deletedCount');
+        
+        if (pendingElement) pendingElement.textContent = pending;
+        if (approvedElement) approvedElement.textContent = approved;
+        if (rejectedElement) rejectedElement.textContent = rejected;
+        if (deletedElement) deletedElement.textContent = approvals.filter(a => a.status === 'deleted').length;
     }
-}
-
-// Mostrar modal de criação de aprovação
-function showCreateApprovalModal() {
-    document.getElementById('createApprovalForm').reset();
-    document.getElementById('amountField').style.display = 'block';
-    new bootstrap.Modal(document.getElementById('createApprovalModal')).show();
 }
 
 // Manipular mudança de tipo de aprovação
 function handleApprovalTypeChange() {
     const type = document.getElementById('approvalType').value;
-    const amountField = document.getElementById('amountField');
+    const amountField = document.getElementById('amount');
+    const amountLabel = amountField.previousElementSibling;
     
-    if (type === 'vacation') {
-        amountField.style.display = 'none';
-        document.getElementById('approvalAmount').value = '';
-    } else {
-        amountField.style.display = 'block';
+    if (amountField && amountLabel) {
+        if (type === 'vacation') {
+            amountField.style.display = 'none';
+            amountLabel.style.display = 'none';
+            amountField.value = '';
+        } else {
+            amountField.style.display = 'block';
+            amountLabel.style.display = 'block';
+        }
     }
 }
 
@@ -595,9 +993,9 @@ async function createApproval() {
     
     try {
         const type = document.getElementById('approvalType').value;
-        const amount = document.getElementById('approvalAmount').value;
-        const approver = document.getElementById('approvalApprover').value;
-        const description = document.getElementById('approvalDescription').value;
+        const amount = document.getElementById('amount').value;
+        const approver = document.getElementById('approver').value;
+        const description = document.getElementById('description').value;
         
         console.log('Valores do formulário:', { type, amount, approver, description });
         
@@ -645,7 +1043,7 @@ async function createApproval() {
         
         if (response.ok) {
             showToast('Sucesso', 'Aprovação criada com sucesso!', 'success');
-            bootstrap.Modal.getInstance(document.getElementById('createApprovalModal')).hide();
+            hideCreateApprovalModal();
             await loadApprovals();
         } else {
             showToast('Erro', data.error || 'Erro ao criar aprovação', 'error');
@@ -666,21 +1064,21 @@ function setResponseAction(action) {
     const approveBtn = document.getElementById('approveBtn');
     const rejectBtn = document.getElementById('rejectBtn');
     
-    // Remover todas as classes de cor
-    approveBtn.classList.remove('btn-success', 'btn-outline-success');
-    rejectBtn.classList.remove('btn-danger', 'btn-outline-danger');
-    
-    // Aplicar classes baseadas na ação
-    if (action === 'approved') {
-        approveBtn.classList.add('btn-success');
-        rejectBtn.classList.add('btn-outline-danger');
-    } else if (action === 'rejected') {
-        approveBtn.classList.add('btn-outline-success');
-        rejectBtn.classList.add('btn-danger');
-    } else {
-        // Estado neutro (pending)
-        approveBtn.classList.add('btn-outline-success');
-        rejectBtn.classList.add('btn-outline-danger');
+    if (approveBtn && rejectBtn) {
+        // Resetar ambos os botões para estado branco com texto colorido
+        approveBtn.classList.remove('bg-green-600', 'bg-green-700', 'bg-green-800', 'text-white');
+        approveBtn.classList.add('bg-white', 'text-green-600', 'border-green-600');
+        rejectBtn.classList.remove('bg-red-600', 'bg-red-700', 'bg-red-800', 'text-white');
+        rejectBtn.classList.add('bg-white', 'text-red-600', 'border-red-600');
+        
+        // Aplicar classes baseadas na ação
+        if (action === 'approved') {
+            approveBtn.classList.remove('bg-white', 'text-green-600', 'border-green-600');
+            approveBtn.classList.add('bg-green-600', 'text-white');
+        } else if (action === 'rejected') {
+            rejectBtn.classList.remove('bg-white', 'text-red-600', 'border-red-600');
+            rejectBtn.classList.add('bg-red-600', 'text-white');
+        }
     }
     
     console.log('Ação definida:', action, 'Botões atualizados');
@@ -688,6 +1086,7 @@ function setResponseAction(action) {
 
 // Mostrar modal de resposta
 async function showResponseModal(approvalId) {
+    console.log('showResponseModal async chamada com approvalId:', approvalId);
     currentApprovalId = approvalId;
     responseAction = null;
     
@@ -712,9 +1111,9 @@ async function showResponseModal(approvalId) {
                 setResponseAction(approval.status);
                 
                 // Atualizar título do modal
-                const modalTitle = document.querySelector('#responseModal .modal-title');
+                const modalTitle = document.querySelector('#responseModal h3');
                 if (modalTitle) {
-                    modalTitle.innerHTML = '<i class="fas fa-edit me-2"></i>Alterar Decisão';
+                    modalTitle.innerHTML = '<i class="fas fa-edit mr-2 text-primary-600"></i>Alterar Decisão';
                 }
             } else {
                 document.getElementById('responseJustification').value = '';
@@ -722,9 +1121,9 @@ async function showResponseModal(approvalId) {
                 setResponseAction(null);
                 
                 // Atualizar título do modal
-                const modalTitle = document.querySelector('#responseModal .modal-title');
+                const modalTitle = document.querySelector('#responseModal h3');
                 if (modalTitle) {
-                    modalTitle.innerHTML = '<i class="fas fa-reply me-2"></i>Responder Aprovação';
+                    modalTitle.innerHTML = '<i class="fas fa-reply mr-2 text-primary-600"></i>Responder Aprovação';
                 }
             }
         } else {
@@ -737,8 +1136,8 @@ async function showResponseModal(approvalId) {
     }
     
     // Mostrar modal
-    const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
-    responseModal.show();
+    const modal = document.getElementById('responseModal');
+    modal.classList.remove('hidden');
 }
 
 // Aprovar aprovação
@@ -779,7 +1178,7 @@ async function approveApproval(approvalId) {
             
             // Se o modal de auditoria estiver aberto, atualizar apenas os dados
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal && auditModal.classList.contains('show')) {
+            if (auditModal && !auditModal.classList.contains('hidden')) {
                 console.log('Modal de auditoria aberto, atualizando dados...');
                 try {
                     const response = await fetch(`${API_BASE_URL}/audit/logs`, {
@@ -848,7 +1247,7 @@ async function rejectApproval(approvalId) {
             
             // Se o modal de auditoria estiver aberto, atualizar apenas os dados
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal && auditModal.classList.contains('show')) {
+            if (auditModal && !auditModal.classList.contains('hidden')) {
                 console.log('Modal de auditoria aberto, atualizando dados...');
                 try {
                     const response = await fetch(`${API_BASE_URL}/audit/logs`, {
@@ -887,7 +1286,25 @@ async function deleteApproval(approvalId) {
         return;
     }
     
-    if (!confirm('Tem certeza que deseja deletar esta aprovação?')) {
+    try {
+        // Buscar detalhes da aprovação antes de deletar
+        const approval = currentApprovals.find(a => a.id === approvalId);
+        if (approval) {
+            showDeleteConfirmationModal(approvalId, approval);
+        } else {
+            showToast('Erro', 'Aprovação não encontrada', 'error');
+        }
+    } catch (error) {
+        console.error('Erro ao buscar aprovação:', error);
+        showToast('Erro', 'Erro ao buscar detalhes da aprovação', 'error');
+    }
+}
+
+async function confirmDeleteApproval() {
+    const approvalId = document.getElementById('deleteConfirmationModal').dataset.approvalId;
+    
+    if (window.processingApproval === approvalId) {
+        console.log('Aprovação já está sendo processada:', approvalId);
         return;
     }
     
@@ -904,18 +1321,16 @@ async function deleteApproval(approvalId) {
         
         if (response.ok) {
             showToast('Sucesso', 'Aprovação deletada com sucesso!', 'success');
+            hideDeleteConfirmationModal();
             
             // Atualizar todos os dados do sistema
-            await Promise.all([
-                loadApprovals(),           // Atualizar lista de aprovações
-                updateStats(currentApprovals), // Atualizar contadores
-                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
-            ]);
+            await loadApprovals();           // Atualizar lista de aprovações
+            await updateStats(currentApprovals); // Atualizar contadores
             
             // Se o modal de auditoria estiver aberto, recarregar os logs
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal.classList.contains('show')) {
-                await showAuditLogs();
+            if (auditModal && !auditModal.classList.contains('hidden')) {
+                await refreshAuditLogs();
             }
         } else {
             const data = await response.json();
@@ -987,10 +1402,7 @@ async function submitResponse() {
             }
             
             // Fechar modal de resposta
-            const responseModal = bootstrap.Modal.getInstance(document.getElementById('responseModal'));
-            if (responseModal) {
-                responseModal.hide();
-            }
+            hideResponseModal();
             
             // Atualizar dados do sistema
             await loadApprovals();
@@ -998,7 +1410,7 @@ async function submitResponse() {
             
             // Se o modal de auditoria estiver aberto, atualizar apenas os dados
             const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal && auditModal.classList.contains('show')) {
+            if (auditModal && !auditModal.classList.contains('hidden')) {
                 console.log('Modal de auditoria aberto, atualizando dados...');
                 try {
                     const response = await fetch(`${API_BASE_URL}/audit/logs`, {
@@ -1044,24 +1456,17 @@ async function showAuditLogs() {
             const data = await response.json();
             currentAuditLogs = data.logs || [];
             
-            // Mostrar o modal primeiro
-            const modalElement = document.getElementById('auditLogsModal');
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
+            // Resetar paginação
+            auditPagination.currentPage = 1;
+            updateAuditPagination();
             
-            // Aguardar o modal estar completamente aberto
-            modalElement.addEventListener('shown.bs.modal', function onModalShown() {
-                console.log('Modal de logs aberto, atualizando display...');
-                updateAuditLogsDisplay();
-                modalElement.removeEventListener('shown.bs.modal', onModalShown);
-            });
+            // Mostrar o modal
+            showAuditLogsModal();
             
-            // Corrigir problema do backdrop ao fechar
-            modalElement.addEventListener('hidden.bs.modal', function onModalHidden() {
-                console.log('Modal de logs fechado, limpando backdrop...');
-                clearModalBackdrop();
-                modalElement.removeEventListener('hidden.bs.modal', onModalHidden);
-            });
+            // Atualizar display com logs paginados
+            const paginatedLogs = getPaginatedAuditLogs();
+            console.log('Logs paginados:', paginatedLogs.length, 'de', currentAuditLogs.length);
+            displayAuditLogs(paginatedLogs);
         } else {
             console.error('Erro ao carregar logs de auditoria:', response.status);
             showToast('Erro', 'Erro ao carregar logs de auditoria', 'error');
@@ -1097,47 +1502,59 @@ function displayAuditLogs(logs, attempts = 0) {
     console.log('Logs de auditoria recebidos:', logs);
     
     if (!logs || logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">Nenhum log encontrado</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">Nenhum log encontrado</td></tr>';
         return;
     }
     
     logs.forEach((log, index) => {
         console.log(`Log ${index}:`, log);
+        console.log('Current user:', currentUser);
         const row = document.createElement('tr');
+        
+        // Adicionar dados do log na linha para clique
+        row.setAttribute('data-approval-id', log.approvalId || '');
+        row.setAttribute('data-log', encodeURIComponent(JSON.stringify(log)));
+        row.style.cursor = 'pointer';
+        
+        // Verificar se tem dados da aprovação deletada ou restaurada
+        let metadata = {};
+        
+        if (log.metadata) {
+            if (typeof log.metadata === 'string') {
+                try {
+                    metadata = JSON.parse(log.metadata);
+                    console.log('Metadata parseado com sucesso:', metadata);
+                } catch (error) {
+                    console.error('Erro ao parsear metadata:', error);
+                    metadata = {};
+                }
+            } else {
+                metadata = log.metadata;
+            }
+        }
         
         // Determinar o tipo de ação e cor do badge
         let actionBadge = '';
         let actionText = '';
         
+        // Verificar se é uma alteração
+        const isAlteration = metadata && metadata.isUpdate;
+        
         if (log.action === 'approved') {
-            actionBadge = 'bg-success';
-            actionText = 'Aprovado';
+            actionBadge = 'bg-green-100 text-green-800';
+            actionText = isAlteration ? 'Aprovado (alterado)' : 'Aprovado';
         } else if (log.action === 'rejected') {
-            actionBadge = 'bg-danger';
-            actionText = 'Rejeitado';
+            actionBadge = 'bg-red-100 text-red-800';
+            actionText = isAlteration ? 'Rejeitado (alterado)' : 'Rejeitado';
         } else if (log.action === 'deleted') {
-            actionBadge = 'bg-dark';
+            actionBadge = 'bg-gray-100 text-gray-800';
             actionText = 'Deletado';
         } else if (log.action === 'restored') {
-            actionBadge = 'bg-info';
+            actionBadge = 'bg-blue-100 text-blue-800';
             actionText = 'Restaurado';
         } else {
-            actionBadge = 'bg-secondary';
+            actionBadge = 'bg-gray-100 text-gray-800';
             actionText = log.action;
-        }
-        
-        // Verificar se tem dados da aprovação deletada ou restaurada
-        let metadata = log.metadata;
-        
-        // Se metadata for string, tentar fazer parse
-        if (typeof metadata === 'string') {
-            try {
-                metadata = JSON.parse(metadata);
-                console.log('Metadata parseado com sucesso:', metadata);
-            } catch (error) {
-                console.error('Erro ao parsear metadata:', error);
-                metadata = {};
-            }
         }
         
         const hasDeletedData = metadata && metadata.deletedApproval;
@@ -1200,46 +1617,32 @@ function displayAuditLogs(logs, attempts = 0) {
         }
         
         row.innerHTML = `
-            <td><small>${formatDate(log.timestamp)}</small></td>
+            <td><small>${log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A'}</small></td>
+            <td>
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                    ${hasDeletedData ? getTypeLabel(metadata.deletedApproval.type) : 'N/A'}
+                </span>
+            </td>
+            <td>${hasDeletedData ? metadata.deletedApproval.requester : 'N/A'}</td>
             <td>${log.approver}</td>
             <td>
-                <span class="badge ${actionBadge}">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${actionBadge}">
                     ${actionText}
                 </span>
-                ${isUpdate ? '<small class="text-warning ms-1">(Alterado)</small>' : ''}
-                ${log.action === 'deleted' ? '<small class="text-danger ms-1">(Excluído)</small>' : ''}
-                ${log.action === 'restored' ? '<small class="text-info ms-1">(Restaurado)</small>' : ''}
             </td>
             <td>
                 ${log.comment || '-'}
-                ${hasDeletedData ? `
-                    <br><small class="text-muted">
-                        <strong>Dados da aprovação excluída:</strong><br>
-                        Tipo: ${getTypeLabel(metadata.deletedApproval.type)}<br>
-                        Solicitante: ${metadata.deletedApproval.requester}<br>
-                        Valor: ${metadata.deletedApproval.amount ? `R$ ${parseFloat(metadata.deletedApproval.amount).toFixed(2)}` : '-'}<br>
-                        Status: ${getStatusLabel(metadata.deletedApproval.status)}
-                    </small>
-                ` : ''}
-                ${hasRestoredData ? `
-                    <br><small class="text-muted">
-                        <strong>Dados da restauração:</strong><br>
-                        Status original: ${getStatusLabel(metadata.restoredApproval.originalStatus)}<br>
-                        Status restaurado: ${getStatusLabel(metadata.restoredApproval.restoredStatus)}
-                    </small>
-                ` : ''}
             </td>
+            <td><small class="text-gray-500">${formatDate(log.timestamp)}</small></td>
             <td>
-                <span class="badge bg-${isUpdate ? 'warning' : log.action === 'deleted' ? 'danger' : log.action === 'restored' ? 'info' : 'info'}">
-                    ${isUpdate ? 'Alteração' : log.action === 'deleted' ? 'Exclusão' : log.action === 'restored' ? 'Restauração' : 'Original'}
-                </span>
-            </td>
-            <td>
-                ${currentUser.role === 'admin' && log.action !== 'deleted' && log.action !== 'restored' ? `
-                    <button class="btn btn-sm btn-outline-warning audit-edit-btn" data-approval-id="${log.approvalId}" data-action="${log.action}" data-comment="${log.comment || ''}">
-                        <i class="fas fa-edit"></i> Alterar
+                ${currentUser && currentUser.role === 'admin' && log.action !== 'deleted' && log.action !== 'restored' ? `
+                    <button class="inline-flex items-center px-2 py-1 border border-yellow-300 text-xs font-medium rounded text-yellow-700 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-yellow-500 transition-colors audit-edit-btn" 
+                            data-approval-id="${log.approvalId}" 
+                            data-action="${log.action}" 
+                            data-comment="${log.comment || ''}">
+                        <i class="fas fa-edit mr-1"></i> Alterar
                     </button>
-                ` : log.action === 'deleted' ? restoreButtonHTML : log.action === 'restored' ? '<small class="text-muted">Já restaurada</small>' : '<small class="text-muted">Apenas admin</small>'}
+                ` : log.action === 'deleted' ? restoreButtonHTML : log.action === 'restored' ? '<small class="text-gray-500">Já restaurada</small>' : '<small class="text-gray-500">Apenas admin</small>'}
             </td>
         `;
         tbody.appendChild(row);
@@ -1255,7 +1658,7 @@ async function refreshData() {
 // Atualizar logs de auditoria se estiverem abertos
 async function refreshAuditLogs() {
     const auditModal = document.getElementById('auditLogsModal');
-    if (auditModal.classList.contains('show')) {
+    if (auditModal && !auditModal.classList.contains('hidden')) {
         try {
             const response = await fetch(`${API_BASE_URL}/audit/logs`, {
                 headers: {
@@ -1320,11 +1723,12 @@ function getActionLabel(action) {
 
 function getStatusClass(status) {
     const classes = {
-        'pending': 'warning',
-        'approved': 'success',
-        'rejected': 'danger'
+        'pending': 'bg-yellow-100 text-yellow-800',
+        'approved': 'bg-green-100 text-green-800',
+        'rejected': 'bg-red-100 text-red-800',
+        'deleted': 'bg-gray-100 text-gray-800'
     };
-    return classes[status] || 'secondary';
+    return classes[status] || 'bg-gray-100 text-gray-800';
 }
 
 function formatDate(dateString) {
@@ -1335,38 +1739,82 @@ function formatDate(dateString) {
 // Funções de UI
 function showToast(title, message, type = 'info') {
     try {
-        const toast = document.getElementById('toast');
-        const toastTitle = document.getElementById('toastTitle');
-        const toastMessage = document.getElementById('toastMessage');
+        const toastContainer = document.getElementById('toastContainer');
         
-        if (!toast || !toastTitle || !toastMessage) {
-            console.error('Elementos do toast não encontrados');
+        if (!toastContainer) {
+            console.error('Container de toast não encontrado');
             alert(`${title}: ${message}`);
             return;
         }
         
-        toastTitle.textContent = title;
-        toastMessage.textContent = message;
+        // Criar elemento toast
+        const toast = document.createElement('div');
+        toast.className = `mb-4 p-4 rounded-lg shadow-lg border-l-4 transition-all duration-300 transform translate-x-full`;
         
-        // Remover classes anteriores
-        toast.classList.remove('bg-success', 'bg-danger', 'bg-info');
-        
-        // Adicionar classe baseada no tipo
-        if (type === 'success') {
-            toast.classList.add('bg-success');
-        } else if (type === 'error') {
-            toast.classList.add('bg-danger');
-        } else {
-            toast.classList.add('bg-info');
+        // Definir cores baseadas no tipo
+        let bgColor, borderColor, textColor;
+        switch (type) {
+            case 'success':
+                bgColor = 'bg-green-50';
+                borderColor = 'border-green-400';
+                textColor = 'text-green-800';
+                break;
+            case 'error':
+                bgColor = 'bg-red-50';
+                borderColor = 'border-red-400';
+                textColor = 'text-red-800';
+                break;
+            case 'warning':
+                bgColor = 'bg-yellow-50';
+                borderColor = 'border-yellow-400';
+                textColor = 'text-yellow-800';
+                break;
+            default:
+                bgColor = 'bg-blue-50';
+                borderColor = 'border-blue-400';
+                textColor = 'text-blue-800';
         }
         
-        if (typeof bootstrap !== 'undefined') {
-            const bsToast = new bootstrap.Toast(toast);
-            bsToast.show();
-        } else {
-            console.error('Bootstrap não disponível para toast');
-            alert(`${title}: ${message}`);
-        }
+        toast.className += ` ${bgColor} ${borderColor} ${textColor}`;
+        
+        // Conteúdo do toast
+        toast.innerHTML = `
+            <div class="flex items-start">
+                <div class="flex-shrink-0">
+                    <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'}"></i>
+                </div>
+                <div class="ml-3 flex-1">
+                    <h4 class="text-sm font-medium">${title}</h4>
+                    <p class="text-sm mt-1">${message}</p>
+                </div>
+                <div class="ml-4 flex-shrink-0">
+                    <button class="text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.parentElement.remove()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // Adicionar ao container
+        toastContainer.appendChild(toast);
+        
+        // Animar entrada
+        setTimeout(() => {
+            toast.classList.remove('translate-x-full');
+        }, 100);
+        
+        // Auto-remover após 5 segundos
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => {
+                    if (toast.parentElement) {
+                        toast.remove();
+                    }
+                }, 300);
+            }
+        }, 5000);
+        
     } catch (error) {
         console.error('Erro ao mostrar toast:', error);
         alert(`${title}: ${message}`);
@@ -1383,53 +1831,8 @@ function hideLoading() {
 
 // Recuperar aprovação deletada
 async function restoreApproval(approvalId, deletedApproval) {
-    if (!confirm('Tem certeza que deseja recuperar esta aprovação?')) {
-        return;
-    }
-    
-    try {
-        showLoading();
-        
-        console.log('Restaurando aprovação:', { approvalId, deletedApproval });
-        
-        const response = await fetch(`${API_BASE_URL}/approval/${approvalId}/restore`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
-            },
-            body: JSON.stringify({
-                deletedApproval: deletedApproval,
-                restoredBy: currentUser.email
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            showToast('Sucesso', 'Aprovação recuperada com sucesso!', 'success');
-            
-            // Atualizar todos os dados do sistema
-            await Promise.all([
-                loadApprovals(),           // Atualizar lista de aprovações
-                updateStats(currentApprovals), // Atualizar contadores
-                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
-            ]);
-            
-            // Se o modal de auditoria estiver aberto, recarregar os logs
-            const auditModal = document.getElementById('auditLogsModal');
-            if (auditModal.classList.contains('show')) {
-                await showAuditLogs();
-            }
-        } else {
-            showToast('Erro', data.error || 'Erro ao recuperar aprovação', 'error');
-        }
-    } catch (error) {
-        console.error('Erro ao recuperar aprovação:', error);
-        showToast('Erro', 'Erro de conexão: ' + error.message, 'error');
-    } finally {
-        hideLoading();
-    }
+    // Usar modal moderno em vez de confirm
+    showRestoreConfirmationModal(approvalId, deletedApproval);
 } 
 
 // Funções de busca
@@ -1593,101 +1996,347 @@ function updateApprovalsDisplay() {
 }
 
 function updateAuditLogsDisplay() {
-    const filteredLogs = filterAuditLogs(currentAuditLogs, auditSearchTerm);
-    displayAuditLogs(filteredLogs);
+                    const filteredLogs = filterAuditLogs(currentAuditLogs, auditSearchTerm);
+                console.log('Logs filtrados:', filteredLogs.length, 'de', currentAuditLogs.length);
+                
+                // Atualizar paginação com logs filtrados
+                auditPagination.currentPage = 1;
+                updateAuditPagination();
+                
+                // Exibir logs filtrados e paginados
+                const paginatedFilteredLogs = getPaginatedAuditLogs(filteredLogs);
+                displayAuditLogs(paginatedFilteredLogs);
 } 
 
-// Função para limpar backdrop e melhorar o fechamento do modal
-function clearModalBackdrop() {
-    console.log('Limpando backdrop do modal...');
-    
-    // Remover foco de todos os elementos dentro de modais
-    const modalElements = document.querySelectorAll('.modal');
-    modalElements.forEach(modal => {
-        const focusedElement = modal.querySelector(':focus');
-        if (focusedElement) {
-            console.log('Removendo foco de:', focusedElement);
-            focusedElement.blur();
-        }
-    });
-    
-    // Verificar se o modal de auditoria está aberto
-    const auditModal = document.getElementById('auditLogsModal');
-    const auditModalOpen = auditModal && auditModal.classList.contains('show');
-    
-    // Remover backdrop manualmente, mas preservar se o modal de auditoria estiver aberto
-    const backdrops = document.querySelectorAll('.modal-backdrop');
-    backdrops.forEach(backdrop => {
-        // Se o modal de auditoria estiver aberto, não remover o backdrop
-        if (auditModalOpen) {
-            console.log('Preservando backdrop para modal de auditoria aberto');
-            return;
-        }
+// Função para carregar logs de auditoria
+async function loadAuditLogs() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/audit/logs`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
         
-        console.log('Removendo backdrop:', backdrop);
-        backdrop.remove();
-    });
-    
-    // Limpar classes do body, mas preservar modal-open se o modal de auditoria estiver aberto
-    if (!auditModalOpen) {
-        document.body.classList.remove('modal-open');
-        document.body.style.overflow = '';
-        document.body.style.paddingRight = '';
-    } else {
-        console.log('Preservando modal-open para modal de auditoria');
+        if (response.ok) {
+            const data = await response.json();
+            currentAuditLogs = data.logs || [];
+            updateAuditLogsDisplay();
+        } else {
+            console.error('Erro ao carregar logs de auditoria:', response.status);
+            showToast('Erro', 'Erro ao carregar logs de auditoria', 'error');
+        }
+    } catch (error) {
+        console.error('Erro de conexão:', error);
+        showToast('Erro', 'Erro de conexão: ' + error.message, 'error');
     }
-    
-    // Remover atributos aria-hidden dos modais, mas preservar o modal de auditoria se estiver aberto
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        modal.removeAttribute('aria-hidden');
-        
-        // Não fechar o modal de auditoria se estiver aberto
-        if (modal.id === 'auditLogsModal' && modal.classList.contains('show')) {
-            console.log('Preservando modal de auditoria aberto');
-            return;
-        }
-        
-        // Para outros modais, definir display none apenas se não estiverem abertos
-        if (!modal.classList.contains('show')) {
-            modal.style.display = 'none';
-        }
-    });
-    
-    console.log('Backdrop limpo com sucesso');
 }
 
-// Função para corrigir problemas de acessibilidade dos modais
-function fixModalAccessibility() {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        modal.addEventListener('shown.bs.modal', function() {
-            this.removeAttribute('aria-hidden');
+// Função para carregar aprovadores
+async function loadApprovers() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/auth/approvers`, {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
         });
         
-        modal.addEventListener('hidden.bs.modal', function() {
-            console.log('Modal fechado, limpando backdrop...');
-            clearModalBackdrop();
-        });
-        
-        // Listener específico para o modal de resposta
-        if (modal.id === 'responseModal') {
-            modal.addEventListener('hide.bs.modal', function() {
-                // Remover foco de todos os elementos dentro do modal antes de fechar
-                const focusedElement = this.querySelector(':focus');
-                if (focusedElement) {
-                    console.log('Removendo foco do modal de resposta:', focusedElement);
-                    focusedElement.blur();
-                }
-            });
+        if (response.ok) {
+            const data = await response.json();
+            const approverSelect = document.getElementById('approver');
+            
+            if (approverSelect) {
+                // Limpar opções existentes, exceto a primeira
+                approverSelect.innerHTML = '<option value="">Selecione um aprovador</option>';
+                
+                // Adicionar aprovadores
+                data.approvers.forEach(approver => {
+                    const option = document.createElement('option');
+                    option.value = approver.email;
+                    option.textContent = `${approver.name} (${approver.role}) - ${approver.email}`;
+                    approverSelect.appendChild(option);
+                });
+            }
+        } else {
+            console.error('Erro ao carregar aprovadores:', response.status);
+            showToast('Erro', 'Erro ao carregar lista de aprovadores', 'error');
         }
-    });
+    } catch (error) {
+        console.error('Erro de conexão:', error);
+        showToast('Erro', 'Erro de conexão: ' + error.message, 'error');
+    }
 } 
 
+// Funções de paginação para logs de auditoria
+function updateAuditPagination() {
+    const totalItems = currentAuditLogs.length;
+    const totalPages = Math.ceil(totalItems / auditPagination.pageSize);
+    
+    auditPagination.totalItems = totalItems;
+    auditPagination.totalPages = totalPages;
+    
+    // Ajustar página atual se necessário
+    if (auditPagination.currentPage > totalPages && totalPages > 0) {
+        auditPagination.currentPage = totalPages;
+    }
+    
+    updateAuditPageInfo();
+}
+
+function updateAuditPageInfo() {
+    const pageInfo = document.getElementById('pageInfo');
+    const prevBtn = document.getElementById('prevPageBtn');
+    const nextBtn = document.getElementById('nextPageBtn');
+    
+    if (pageInfo) {
+        pageInfo.textContent = `Página ${auditPagination.currentPage} de ${auditPagination.totalPages}`;
+    }
+    
+    // Botões sempre habilitados para navegação circular
+    if (prevBtn) {
+        prevBtn.disabled = false;
+    }
+    
+    if (nextBtn) {
+        nextBtn.disabled = false;
+    }
+}
+
+function getPaginatedAuditLogs(logsToPaginate = null) {
+    const logs = logsToPaginate || currentAuditLogs;
+    const startIndex = (auditPagination.currentPage - 1) * auditPagination.pageSize;
+    const endIndex = startIndex + auditPagination.pageSize;
+    const paginatedLogs = logs.slice(startIndex, endIndex);
+    console.log('Paginação audit logs:', {
+        currentPage: auditPagination.currentPage,
+        pageSize: auditPagination.pageSize,
+        totalItems: logs.length,
+        startIndex,
+        endIndex,
+        paginatedCount: paginatedLogs.length
+    });
+    return paginatedLogs;
+}
+
+function goToAuditPage(page) {
+    if (page < 1) {
+        auditPagination.currentPage = auditPagination.totalPages;
+    } else if (page > auditPagination.totalPages) {
+        auditPagination.currentPage = 1;
+    } else {
+        auditPagination.currentPage = page;
+    }
+    updateAuditPageInfo();
+    displayAuditLogs(getPaginatedAuditLogs());
+}
+
+function changeAuditPageSize(newSize) {
+    auditPagination.pageSize = parseInt(newSize);
+    auditPagination.currentPage = 1; // Voltar para primeira página
+    updateAuditPagination();
+    displayAuditLogs(getPaginatedAuditLogs());
+}
+
+// Funções de paginação para tabela principal
+function updateMainPagination() {
+    const totalItems = currentApprovals.length;
+    const totalPages = Math.ceil(totalItems / mainPagination.pageSize);
+    
+    mainPagination.totalItems = totalItems;
+    mainPagination.totalPages = totalPages;
+    
+    // Ajustar página atual se necessário
+    if (mainPagination.currentPage > totalPages && totalPages > 0) {
+        mainPagination.currentPage = totalPages;
+    }
+    
+    updateMainPageInfo();
+}
+
+function updateMainPageInfo() {
+    const pageInfo = document.getElementById('mainPageInfo');
+    const prevBtn = document.getElementById('mainPrevPageBtn');
+    const nextBtn = document.getElementById('mainNextPageBtn');
+    
+    if (pageInfo) {
+        pageInfo.textContent = `Página ${mainPagination.currentPage} de ${mainPagination.totalPages}`;
+    }
+    
+    // Botões sempre habilitados para navegação circular
+    if (prevBtn) {
+        prevBtn.disabled = false;
+    }
+    
+    if (nextBtn) {
+        nextBtn.disabled = false;
+    }
+}
+
+function getPaginatedMainApprovals() {
+    const startIndex = (mainPagination.currentPage - 1) * mainPagination.pageSize;
+    const endIndex = startIndex + mainPagination.pageSize;
+    const paginatedApprovals = currentApprovals.slice(startIndex, endIndex);
+    console.log('Paginação main approvals:', {
+        currentPage: mainPagination.currentPage,
+        pageSize: mainPagination.pageSize,
+        totalItems: currentApprovals.length,
+        startIndex,
+        endIndex,
+        paginatedCount: paginatedApprovals.length
+    });
+    return paginatedApprovals;
+}
+
+function goToMainPage(page) {
+    if (page < 1) {
+        mainPagination.currentPage = mainPagination.totalPages;
+    } else if (page > mainPagination.totalPages) {
+        mainPagination.currentPage = 1;
+    } else {
+        mainPagination.currentPage = page;
+    }
+    updateMainPageInfo();
+    displayApprovals(getPaginatedMainApprovals());
+}
+
+function changeMainPageSize(newSize) {
+    mainPagination.pageSize = parseInt(newSize);
+    mainPagination.currentPage = 1; // Voltar para primeira página
+    updateMainPagination();
+    displayApprovals(getPaginatedMainApprovals());
+}
+
+// Função de ordenação para logs de auditoria
+function sortAuditLogs(field) {
+    // Se clicou na mesma coluna
+    if (auditPagination.currentSort && auditPagination.currentSort.field === field) {
+        auditPagination.currentSort.clicks++;
+        
+        // Terceiro clique: remover filtro
+        if (auditPagination.currentSort.clicks >= 3) {
+            auditPagination.currentSort.field = null;
+            auditPagination.currentSort.direction = 'asc';
+            auditPagination.currentSort.clicks = 0;
+            
+            // Limpar todos os ícones
+            document.querySelectorAll('#auditLogsTable .sortable').forEach(th => {
+                th.classList.remove('asc', 'desc', 'bg-blue-50', 'text-blue-700');
+                const icon = th.querySelector('i');
+                if (icon) {
+                    icon.className = 'fas fa-sort ml-1';
+                }
+            });
+            
+            // Retornar ao estado original
+            const paginatedLogs = getPaginatedAuditLogs();
+            displayAuditLogs(paginatedLogs);
+            return;
+        }
+        
+        // Primeiro e segundo clique: alternar direção
+        auditPagination.currentSort.direction = auditPagination.currentSort.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        // Nova coluna: começar do primeiro clique
+        auditPagination.currentSort = { field, direction: 'asc', clicks: 1 };
+    }
+    
+    // Atualizar ícones dos cabeçalhos
+    document.querySelectorAll('#auditLogsTable .sortable').forEach(th => {
+        th.classList.remove('asc', 'desc', 'bg-blue-50', 'text-blue-700');
+        const icon = th.querySelector('i');
+        if (icon) {
+            icon.className = 'fas fa-sort ml-1';
+        }
+        
+        if (th.dataset.sort === field) {
+            th.classList.add(auditPagination.currentSort.direction, 'bg-blue-50', 'text-blue-700');
+            if (icon) {
+                if (auditPagination.currentSort.direction === 'asc') {
+                    icon.className = 'fas fa-sort-up ml-1';
+                } else {
+                    icon.className = 'fas fa-sort-down ml-1';
+                }
+            }
+        }
+    });
+    
+    // Ordenar logs de auditoria
+    const sortedLogs = [...currentAuditLogs].sort((a, b) => {
+        let aVal, bVal;
+        
+        // Tratamento especial para diferentes campos
+        if (field === 'id') {
+            aVal = a.approvalId || '';
+            bVal = b.approvalId || '';
+        } else if (field === 'type') {
+            let metadataA = {};
+            let metadataB = {};
+            try {
+                metadataA = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : a.metadata || {};
+                metadataB = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : b.metadata || {};
+            } catch (error) {
+                metadataA = {};
+                metadataB = {};
+            }
+            aVal = metadataA.deletedApproval?.type || '';
+            bVal = metadataB.deletedApproval?.type || '';
+        } else if (field === 'requester') {
+            let metadataA = {};
+            let metadataB = {};
+            try {
+                metadataA = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : a.metadata || {};
+                metadataB = typeof b.metadata === 'string' ? JSON.parse(b.metadata) : b.metadata || {};
+            } catch (error) {
+                metadataA = {};
+                metadataB = {};
+            }
+            aVal = metadataA.deletedApproval?.requester || '';
+            bVal = metadataB.deletedApproval?.requester || '';
+        } else if (field === 'approver') {
+            aVal = a.approver || '';
+            bVal = b.approver || '';
+        } else if (field === 'status') {
+            // Mapear ações para status mais legíveis
+            const getStatusValue = (action) => {
+                switch(action) {
+                    case 'approved': return 'Aprovado';
+                    case 'rejected': return 'Rejeitado';
+                    case 'deleted': return 'Deletado';
+                    case 'restored': return 'Restaurado';
+                    default: return action;
+                }
+            };
+            aVal = getStatusValue(a.action || '');
+            bVal = getStatusValue(b.action || '');
+        } else if (field === 'comment') {
+            aVal = a.comment || '';
+            bVal = b.comment || '';
+        } else if (field === 'timestamp') {
+            aVal = new Date(a.timestamp);
+            bVal = new Date(b.timestamp);
+        } else {
+            aVal = String(a[field] || '').toLowerCase();
+            bVal = String(b[field] || '').toLowerCase();
+        }
+        
+        if (aVal < bVal) return auditPagination.currentSort.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return auditPagination.currentSort.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+    
+    currentAuditLogs = sortedLogs;
+    updateAuditPagination();
+    displayAuditLogs(getPaginatedAuditLogs());
+}
+
 // Funções de export
-async function exportAuditLogsCSV() {
+async function exportAuditLogsCSV(startDate = null, endDate = null) {
     try {
-        const response = await fetch(`${API_BASE_URL}/audit/export/csv`, {
+        if (!startDate || !endDate) {
+            showExportPeriodModal('csv');
+            return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/audit/export/csv?startDate=${startDate}&endDate=${endDate}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
             }
@@ -1698,24 +2347,31 @@ async function exportAuditLogsCSV() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'audit_logs.csv';
+            a.download = `audit-logs-${startDate}-to-${endDate}.csv`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            showToast('Sucesso', 'Logs exportados em CSV', 'success');
+            showToast('Sucesso', 'CSV exportado com sucesso!', 'success');
         } else {
-            showToast('Erro', 'Erro ao exportar logs', 'error');
+            const errorData = await response.json();
+            console.error('Erro na resposta:', errorData);
+            showToast('Erro', `Erro ao exportar CSV: ${errorData.error || 'Erro desconhecido'}`, 'error');
         }
     } catch (error) {
         console.error('Erro ao exportar CSV:', error);
-        showToast('Erro', 'Erro ao exportar logs', 'error');
+        showToast('Erro', 'Erro de conexão ao exportar CSV', 'error');
     }
 }
 
-async function exportAuditLogsPDF() {
+async function exportAuditLogsPDF(startDate = null, endDate = null) {
     try {
-        const response = await fetch(`${API_BASE_URL}/audit/export/pdf`, {
+        if (!startDate || !endDate) {
+            showExportPeriodModal('pdf');
+            return;
+        }
+
+        const response = await fetch(`${API_BASE_URL}/audit/export/pdf?startDate=${startDate}&endDate=${endDate}`, {
             headers: {
                 'Authorization': `Bearer ${authToken}`
             }
@@ -1726,17 +2382,458 @@ async function exportAuditLogsPDF() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'audit_logs.pdf';
+            a.download = `audit-logs-${startDate}-to-${endDate}.pdf`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
-            showToast('Sucesso', 'Logs exportados em PDF', 'success');
+            showToast('Sucesso', 'PDF exportado com sucesso!', 'success');
         } else {
-            showToast('Erro', 'Erro ao exportar logs', 'error');
+            const errorData = await response.json();
+            console.error('Erro na resposta:', errorData);
+            showToast('Erro', `Erro ao exportar PDF: ${errorData.error || 'Erro desconhecido'}`, 'error');
         }
     } catch (error) {
         console.error('Erro ao exportar PDF:', error);
-        showToast('Erro', 'Erro ao exportar logs', 'error');
+        showToast('Erro', 'Erro de conexão ao exportar PDF', 'error');
     }
 } 
+
+// Funções para modal de confirmação de restauração
+function showRestoreConfirmationModal(approvalId, deletedApproval) {
+    const modal = document.getElementById('restoreConfirmationModal');
+    const detailsContainer = document.getElementById('restoreApprovalDetails');
+    
+    if (modal && detailsContainer) {
+        // Exibir detalhes da aprovação
+        detailsContainer.innerHTML = `
+            <div class="text-sm">
+                <p><strong>Tipo:</strong> ${getTypeLabel(deletedApproval.type)}</p>
+                <p><strong>Solicitante:</strong> ${deletedApproval.requester}</p>
+                <p><strong>Aprovador:</strong> ${deletedApproval.approver}</p>
+                <p><strong>Valor:</strong> R$ ${deletedApproval.amount || 'N/A'}</p>
+                <p><strong>Descrição:</strong> ${deletedApproval.description}</p>
+            </div>
+        `;
+        
+        // Armazenar dados para uso na confirmação
+        modal.dataset.approvalId = approvalId;
+        modal.dataset.deletedApproval = JSON.stringify(deletedApproval);
+        
+        modal.classList.remove('hidden');
+    }
+}
+
+function hideRestoreConfirmationModal() {
+    const modal = document.getElementById('restoreConfirmationModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        // Limpar dados
+        delete modal.dataset.approvalId;
+        delete modal.dataset.deletedApproval;
+    }
+}
+
+async function confirmRestoreApproval() {
+    const modal = document.getElementById('restoreConfirmationModal');
+    if (!modal) return;
+    
+    const approvalId = modal.dataset.approvalId;
+    const deletedApproval = JSON.parse(modal.dataset.deletedApproval || '{}');
+    
+    if (!approvalId || !deletedApproval) {
+        showToast('Erro', 'Dados da aprovação não encontrados', 'error');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        console.log('Restaurando aprovação:', { approvalId, deletedApproval });
+        
+        const response = await fetch(`${API_BASE_URL}/approval/${approvalId}/restore`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                deletedApproval: deletedApproval,
+                restoredBy: currentUser.email
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('Sucesso', 'Aprovação recuperada com sucesso!', 'success');
+            
+            // Fechar modal de confirmação
+            hideRestoreConfirmationModal();
+            
+            // Atualizar todos os dados do sistema
+            await Promise.all([
+                loadApprovals(),           // Atualizar lista de aprovações
+                updateStats(currentApprovals), // Atualizar contadores
+                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
+            ]);
+            
+            // Se o modal de auditoria estiver aberto, recarregar os logs
+            const auditModal = document.getElementById('auditLogsModal');
+            if (auditModal && !auditModal.classList.contains('hidden')) {
+                await showAuditLogs();
+            }
+        } else {
+            showToast('Erro', data.error || 'Erro ao recuperar aprovação', 'error');
+        }
+    } catch (error) {
+        console.error('Erro ao recuperar aprovação:', error);
+        showToast('Erro', 'Erro de conexão: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Funções para modal de alteração
+function showAlterationModal(approvalId, currentStatus) {
+    console.log('showAlterationModal chamada:', { approvalId, currentStatus });
+    const modal = document.getElementById('alterationModal');
+    const justificationField = document.getElementById('alterationJustification');
+    
+    if (!modal) {
+        console.error('Modal de alteração não encontrado');
+        return;
+    }
+    
+    if (justificationField) {
+        // Limpar campo de justificativa
+        justificationField.value = '';
+    }
+    
+    // Armazenar dados para uso na confirmação
+    modal.dataset.approvalId = approvalId;
+    modal.dataset.currentStatus = currentStatus;
+    
+    // Mostrar o status atual da aprovação (não o oposto)
+    setAlterationAction(currentStatus);
+    
+    modal.classList.remove('hidden');
+    console.log('Modal de alteração aberto');
+}
+
+function hideAlterationModal() {
+    const modal = document.getElementById('alterationModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        // Limpar dados
+        delete modal.dataset.approvalId;
+        delete modal.dataset.currentStatus;
+    }
+}
+
+function setAlterationAction(action) {
+    const approveBtn = document.getElementById('alterApproveBtn');
+    const rejectBtn = document.getElementById('alterRejectBtn');
+    
+    if (approveBtn && rejectBtn) {
+        // Resetar ambos os botões para estado branco com texto colorido
+        approveBtn.classList.remove('bg-green-600', 'bg-green-700', 'bg-green-800', 'text-white');
+        approveBtn.classList.add('bg-white', 'text-green-600', 'border-green-600');
+        rejectBtn.classList.remove('bg-red-600', 'bg-red-700', 'bg-red-800', 'text-white');
+        rejectBtn.classList.add('bg-white', 'text-red-600', 'border-red-600');
+        
+        // Aplicar classe ativa baseada na ação selecionada
+        if (action === 'approved') {
+            approveBtn.classList.remove('bg-white', 'text-green-600', 'border-green-600');
+            approveBtn.classList.add('bg-green-600', 'text-white');
+        } else if (action === 'rejected') {
+            rejectBtn.classList.remove('bg-white', 'text-red-600', 'border-red-600');
+            rejectBtn.classList.add('bg-red-600', 'text-white');
+        }
+        
+        // Armazenar ação selecionada
+        const modal = document.getElementById('alterationModal');
+        if (modal) {
+            modal.dataset.selectedAction = action;
+        }
+        
+        console.log('Ação de alteração definida:', action);
+    }
+}
+
+async function confirmAlteration() {
+    const modal = document.getElementById('alterationModal');
+    if (!modal) return;
+    
+    const approvalId = modal.dataset.approvalId;
+    const currentStatus = modal.dataset.currentStatus;
+    const selectedAction = modal.dataset.selectedAction;
+    const justification = document.getElementById('alterationJustification').value.trim();
+    
+    if (!approvalId || !selectedAction) {
+        showToast('Erro', 'Dados da aprovação não encontrados', 'error');
+        return;
+    }
+    
+    if (!justification) {
+        showToast('Erro', 'Justificativa é obrigatória', 'error');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        console.log('Alterando aprovação:', { approvalId, currentStatus, selectedAction, justification });
+        
+        const response = await fetch(`${API_BASE_URL}/approval/${approvalId}/respond`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                action: selectedAction,
+                justification: justification,
+                approverID: currentUser.email,
+                isAlteration: true,
+                previousStatus: currentStatus
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            showToast('Sucesso', 'Status da aprovação alterado com sucesso!', 'success');
+            
+            // Fechar modal de alteração
+            hideAlterationModal();
+            
+            // Atualizar todos os dados do sistema
+            await Promise.all([
+                loadApprovals(),           // Atualizar lista de aprovações
+                updateStats(currentApprovals), // Atualizar contadores
+                refreshAuditLogs()         // Atualizar logs de auditoria se estiverem abertos
+            ]);
+            
+            // Se o modal de auditoria estiver aberto, recarregar os logs
+            const auditModal = document.getElementById('auditLogsModal');
+            if (auditModal && !auditModal.classList.contains('hidden')) {
+                await showAuditLogs();
+            }
+        } else {
+            showToast('Erro', data.error || 'Erro ao alterar aprovação', 'error');
+        }
+    } catch (error) {
+        console.error('Erro ao alterar aprovação:', error);
+        showToast('Erro', 'Erro de conexão: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+} 
+
+// Funções para o modal de confirmação de exclusão
+function showDeleteConfirmationModal(approvalId, approval) {
+    const modal = document.getElementById('deleteConfirmationModal');
+    const detailsContainer = document.getElementById('deleteApprovalDetails');
+    
+    if (modal && detailsContainer) {
+        // Armazenar ID da aprovação no modal
+        modal.dataset.approvalId = approvalId;
+        
+        // Preencher detalhes da aprovação
+        detailsContainer.innerHTML = `
+            <div class="space-y-2">
+                <div><strong>Tipo:</strong> ${getTypeLabel(approval.type)}</div>
+                <div><strong>Solicitante:</strong> ${approval.requester}</div>
+                <div><strong>Descrição:</strong> ${approval.description}</div>
+                ${approval.amount ? `<div><strong>Valor:</strong> R$ ${approval.amount.toFixed(2)}</div>` : ''}
+                <div><strong>Status:</strong> <span class="${getStatusClass(approval.status)}">${getStatusLabel(approval.status)}</span></div>
+            </div>
+        `;
+        
+        modal.classList.remove('hidden');
+    }
+}
+
+function hideDeleteConfirmationModal() {
+    const modal = document.getElementById('deleteConfirmationModal');
+    if (modal) {
+        modal.classList.add('hidden');
+        delete modal.dataset.approvalId;
+    }
+}
+
+// Funções para o modal de detalhes da aprovação
+function showApprovalDetailsModal(approval) {
+    const modal = document.getElementById('approvalDetailsModal');
+    
+    if (modal) {
+        // Preencher detalhes da aprovação
+        document.getElementById('detailType').textContent = getTypeLabel(approval.type);
+        document.getElementById('detailRequester').textContent = approval.requester;
+        document.getElementById('detailApprover').textContent = approval.approver;
+        document.getElementById('detailStatus').innerHTML = `<span class="${getStatusClass(approval.status)}">${getStatusLabel(approval.status)}</span>`;
+        document.getElementById('detailAmount').textContent = approval.amount ? `R$ ${approval.amount.toFixed(2)}` : 'N/A';
+        document.getElementById('detailCreatedAt').textContent = formatDate(approval.createdAt);
+        document.getElementById('detailUpdatedAt').textContent = formatDate(approval.updatedAt);
+        document.getElementById('detailDescription').textContent = approval.description;
+        
+        // Mostrar informações de resposta se aplicável
+        const responseInfo = document.getElementById('detailResponseInfo');
+        const justification = document.getElementById('detailJustification');
+        
+        if (approval.responseBy && approval.justification) {
+            document.getElementById('detailResponseBy').textContent = approval.responseBy;
+            document.getElementById('detailJustificationText').textContent = approval.justification;
+            responseInfo.classList.remove('hidden');
+            justification.classList.remove('hidden');
+        } else {
+            responseInfo.classList.add('hidden');
+            justification.classList.add('hidden');
+        }
+        
+        modal.classList.remove('hidden');
+    }
+}
+
+function hideApprovalDetailsModal() {
+    const modal = document.getElementById('approvalDetailsModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+// Função para mostrar detalhes dos logs de auditoria
+function showAuditLogDetails(log) {
+    const modal = document.getElementById('approvalDetailsModal');
+    
+    // Extrair dados do log
+    let metadata = {};
+    if (log.metadata) {
+        if (typeof log.metadata === 'string') {
+            try {
+                metadata = JSON.parse(log.metadata);
+            } catch (error) {
+                metadata = {};
+            }
+        } else {
+            metadata = log.metadata;
+        }
+    }
+    
+    const deletedApproval = metadata.deletedApproval || {};
+    
+    // Preencher dados no modal
+    document.getElementById('detailType').textContent = getTypeLabel(deletedApproval.type || 'N/A');
+    document.getElementById('detailRequester').textContent = deletedApproval.requester || 'N/A';
+    document.getElementById('detailApprover').textContent = log.approver || 'N/A';
+    document.getElementById('detailStatus').textContent = getActionLabel(log.action) + (metadata.isUpdate ? ' (alterado)' : '');
+    document.getElementById('detailAmount').textContent = deletedApproval.amount ? `R$ ${deletedApproval.amount.toFixed(2)}` : 'N/A';
+    document.getElementById('detailCreatedAt').textContent = formatDate(deletedApproval.createdAt || log.timestamp);
+    document.getElementById('detailUpdatedAt').textContent = formatDate(log.timestamp);
+    document.getElementById('detailDescription').textContent = deletedApproval.description || 'N/A';
+    
+    // Mostrar justificativa se houver
+    const justificationDiv = document.getElementById('detailJustification');
+    const justificationText = document.getElementById('detailJustificationText');
+    if (log.comment) {
+        justificationText.textContent = log.comment;
+        justificationDiv.classList.remove('hidden');
+    } else {
+        justificationDiv.classList.add('hidden');
+    }
+    
+    // Mostrar informações de resposta se aplicável
+    const responseInfo = document.getElementById('detailResponseInfo');
+    if (log.action === 'approved' || log.action === 'rejected') {
+        document.getElementById('detailResponseBy').textContent = log.approver || 'N/A';
+        responseInfo.classList.remove('hidden');
+    } else {
+        responseInfo.classList.add('hidden');
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+// Funções para modal de exportação
+let currentExportType = null;
+
+function showExportPeriodModal(exportType) {
+    currentExportType = exportType;
+    const modal = document.getElementById('exportPeriodModal');
+    const startDate = document.getElementById('exportStartDate');
+    const endDate = document.getElementById('exportEndDate');
+    
+    // Definir datas padrão (último mês)
+    const today = new Date();
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+    
+    startDate.value = lastMonth.toISOString().split('T')[0];
+    endDate.value = today.toISOString().split('T')[0];
+    
+    modal.classList.remove('hidden');
+}
+
+function hideExportPeriodModal() {
+    const modal = document.getElementById('exportPeriodModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+    currentExportType = null;
+}
+
+function setQuickDateRange(range) {
+    const startDate = document.getElementById('exportStartDate');
+    const endDate = document.getElementById('exportEndDate');
+    const today = new Date();
+    
+    switch (range) {
+        case 'week':
+            const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+            startDate.value = lastWeek.toISOString().split('T')[0];
+            endDate.value = today.toISOString().split('T')[0];
+            break;
+        case 'month':
+            const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, today.getDate());
+            startDate.value = lastMonth.toISOString().split('T')[0];
+            endDate.value = today.toISOString().split('T')[0];
+            break;
+        case 'year':
+            const lastYear = new Date(today.getFullYear() - 1, today.getMonth(), today.getDate());
+            startDate.value = lastYear.toISOString().split('T')[0];
+            endDate.value = today.toISOString().split('T')[0];
+            break;
+        case 'all':
+            startDate.value = '2020-01-01';
+            endDate.value = today.toISOString().split('T')[0];
+            break;
+    }
+}
+
+async function confirmExportWithPeriod() {
+    const startDate = document.getElementById('exportStartDate').value;
+    const endDate = document.getElementById('exportEndDate').value;
+    
+    if (!startDate || !endDate) {
+        showToast('Erro', 'Por favor, selecione as datas inicial e final', 'error');
+        return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+        showToast('Erro', 'A data inicial não pode ser maior que a data final', 'error');
+        return;
+    }
+    
+    hideExportPeriodModal();
+    
+    try {
+        if (currentExportType === 'csv') {
+            await exportAuditLogsCSV(startDate, endDate);
+        } else if (currentExportType === 'pdf') {
+            await exportAuditLogsPDF(startDate, endDate);
+        }
+    } catch (error) {
+        console.error('Erro na exportação:', error);
+        showToast('Erro', 'Erro ao exportar dados', 'error');
+    }
+}

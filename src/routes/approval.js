@@ -82,7 +82,9 @@ const responseSchema = Joi.object({
     .pattern(/^[^<>]*$/).message('Justificativa não pode conter tags HTML')
     .pattern(/^[^';]*$/).message('Justificativa não pode conter caracteres especiais')
     .pattern(/^[^()]*$/).message('Justificativa não pode conter caracteres especiais')
-    .pattern(/^[^"]*$/).message('Justificativa não pode conter aspas duplas')
+    .pattern(/^[^"]*$/).message('Justificativa não pode conter aspas duplas'),
+  isAlteration: Joi.boolean().optional(),
+  previousStatus: Joi.string().valid('approved', 'rejected', 'pending').optional()
 });
 
 // POST /api/approval/:id/respond
@@ -103,12 +105,14 @@ router.post('/:id/respond', authenticateToken, authorizeApprover, apiLimiter, se
       });
     }
 
-    const { action, approverID, justification } = value;
+    const { action, approverID, justification, isAlteration, previousStatus } = value;
 
     const result = await approvalService.respondToApproval(id, {
       action,
       approverID,
-      justification
+      justification,
+      isAlteration,
+      previousStatus
     });
 
     logger.info('Resposta à aprovação', {
@@ -211,7 +215,11 @@ const restoreSchema = Joi.object({
   deletedApproval: Joi.object({
     id: Joi.string().required(),
     type: Joi.string().valid('purchase', 'reimbursement', 'vacation').required(),
-    amount: Joi.number().positive().optional(),
+    amount: Joi.number().positive().allow(null).when('type', {
+      is: 'vacation',
+      then: Joi.optional().allow(null),
+      otherwise: Joi.required()
+    }),
     requester: Joi.string().email().required(),
     approver: Joi.string().email().required(),
     description: Joi.string().required(),

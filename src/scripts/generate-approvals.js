@@ -3,7 +3,7 @@ const databaseService = require('../services/database');
 const approvalService = require('../services/approvalService');
 const auditService = require('../services/auditService');
 
-console.log('=== GERANDO 100 APROVAÇÕES DIVERSAS ===');
+console.log('=== GERANDO 200 APROVAÇÕES DIVERSAS ===');
 
 const types = ['purchase', 'reimbursement', 'vacation'];
 const requesters = [
@@ -54,7 +54,7 @@ async function generateApprovals() {
   try {
     console.log('\nGerando aprovações...');
     
-    for (let i = 1; i <= 100; i++) {
+    for (let i = 1; i <= 200; i++) {
       const type = types[Math.floor(Math.random() * types.length)];
       const requester = requesters[Math.floor(Math.random() * requesters.length)];
       const approver = approvers[Math.floor(Math.random() * approvers.length)];
@@ -110,22 +110,22 @@ async function generateApprovals() {
       }
     }
     
-    console.log('\n✅ 100 aprovações geradas com sucesso!');
+    console.log('\n✅ 200 aprovações geradas com sucesso!');
     console.log('\nEstatísticas:');
     
     // Contar por status
-    const pendingCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = "pending"').get().count;
-    const approvedCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = "approved"').get().count;
-    const rejectedCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = "rejected"').get().count;
+    const pendingCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = ?').get('pending').count;
+    const approvedCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = ?').get('approved').count;
+    const rejectedCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE status = ?').get('rejected').count;
     
     console.log(`  - Pendentes: ${pendingCount}`);
     console.log(`  - Aprovadas: ${approvedCount}`);
     console.log(`  - Rejeitadas: ${rejectedCount}`);
     
     // Contar por tipo
-    const purchaseCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE type = "purchase"').get().count;
-    const reimbursementCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE type = "reimbursement"').get().count;
-    const vacationCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE type = "vacation"').get().count;
+    const purchaseCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE type = ?').get('purchase').count;
+    const reimbursementCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE type = ?').get('reimbursement').count;
+    const vacationCount = databaseService.db.prepare('SELECT COUNT(*) as count FROM approvals WHERE type = ?').get('vacation').count;
     
     console.log(`\nPor tipo:`);
     console.log(`  - Compras: ${purchaseCount}`);

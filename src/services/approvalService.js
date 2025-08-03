@@ -83,15 +83,26 @@ class ApprovalService {
       throw error;
     }
 
-    // Registrar log de auditoria
-    await auditService.createAuditLog({
+    // Registrar log de auditoria com informações de alteração
+    const auditData = {
       approver: responseData.approverID,
       action: responseData.action,
       timestamp: new Date().toISOString(),
       comment: responseData.justification,
       approvalID: approvalId,
       isUpdate: isUpdate
-    });
+    };
+
+    // Adicionar informações específicas de alteração se for uma alteração
+    if (responseData.isAlteration && responseData.previousStatus) {
+      auditData.metadata = {
+        isUpdate: true,
+        previousStatus: responseData.previousStatus,
+        newStatus: responseData.action
+      };
+    }
+
+    await auditService.createAuditLog(auditData);
 
     logger.info(isUpdate ? 'Decisão alterada' : 'Aprovação respondida', {
       approvalID: approvalId,

@@ -76,16 +76,33 @@ class AuditService {
     throw new Error('Formato não suportado');
   }
 
-  generateCSV(logs) {
-    const headers = ['ID', 'Aprovador', 'Ação', 'Timestamp', 'Comentário', 'ID Aprovação'];
-    const rows = logs.map(log => [
-      log.id,
-      log.approver,
-      log.action,
-      log.timestamp,
-      log.comment,
-      log.approvalId
-    ]);
+  async generateCSV(logs) {
+    const headers = ['ID', 'Tipo', 'Solicitante', 'Aprovador', 'Status', 'Justificativa', 'Data', 'Ação'];
+    const rows = logs.map(log => {
+      let metadata = {};
+      if (typeof log.metadata === 'string') {
+        try {
+          metadata = JSON.parse(log.metadata);
+        } catch (error) {
+          metadata = {};
+        }
+      } else {
+        metadata = log.metadata || {};
+      }
+
+      const deletedApproval = metadata.deletedApproval || {};
+      
+      return [
+        log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A',
+        deletedApproval.type || 'N/A',
+        deletedApproval.requester || 'N/A',
+        log.approver || 'N/A',
+        log.action || 'N/A',
+        log.comment || '-',
+        log.timestamp || 'N/A',
+        log.action || 'N/A'
+      ];
+    });
 
     const csvContent = [headers, ...rows]
       .map(row => row.map(field => `"${field}"`).join(','))
@@ -94,21 +111,41 @@ class AuditService {
     return Buffer.from(csvContent, 'utf-8');
   }
 
-  generatePDF(logs) {
+  async generatePDF(logs) {
     // Implementação básica de PDF (em produção, usar biblioteca como PDFKit)
     const pdfContent = `
       Relatório de Auditoria
-      Data: ${new Date().toISOString()}
+      ====================
       
-      ${logs.map(log => `
-        ID: ${log.id}
-        Aprovador: ${log.approver}
-        Ação: ${log.action}
-        Timestamp: ${log.timestamp}
-        Comentário: ${log.comment}
-        ID Aprovação: ${log.approvalId}
-        ---
-      `).join('')}
+      Data de geração: ${new Date().toLocaleString('pt-BR')}
+      Total de logs: ${logs.length}
+      
+      ${logs.map((log, index) => {
+        let metadata = {};
+        if (typeof log.metadata === 'string') {
+          try {
+            metadata = JSON.parse(log.metadata);
+          } catch (error) {
+            metadata = {};
+          }
+        } else {
+          metadata = log.metadata || {};
+        }
+
+        const deletedApproval = metadata.deletedApproval || {};
+        
+        return `
+        Log ${index + 1}:
+        - ID: ${log.approvalId ? log.approvalId.substring(0, 8) + '...' : 'N/A'}
+        - Tipo: ${deletedApproval.type || 'N/A'}
+        - Solicitante: ${deletedApproval.requester || 'N/A'}
+        - Aprovador: ${log.approver || 'N/A'}
+        - Ação: ${log.action || 'N/A'}
+        - Data: ${log.timestamp || 'N/A'}
+        - Comentário: ${log.comment || '-'}
+        - Descrição: ${deletedApproval.description || 'N/A'}
+        `;
+      }).join('\n')}
     `;
 
     return Buffer.from(pdfContent, 'utf-8');

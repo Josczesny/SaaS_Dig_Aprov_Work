@@ -387,4 +387,29 @@ router.get('/users', authenticateToken, authorizeAdmin, securityLogger, (req, re
   }
 });
 
+// GET /api/auth/approvers (buscar aprovadores)
+router.get('/approvers', authenticateToken, securityLogger, (req, res) => {
+  try {
+    const databaseService = require('../services/database');
+    const approvers = databaseService.findApprovers();
+
+    logger.info('Lista de aprovadores consultada', {
+      userId: req.user.id,
+      email: req.user.email,
+      approverCount: approvers.length,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({ approvers });
+
+  } catch (error) {
+    logger.error('Erro ao listar aprovadores', {
+      error: error.message,
+      userId: req.user?.id,
+      timestamp: new Date().toISOString()
+    });
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
 module.exports = router; 

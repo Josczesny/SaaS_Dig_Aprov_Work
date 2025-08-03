@@ -29,27 +29,48 @@ router.get('/logs', authenticateToken, authorizeAuditor, apiLimiter, securityLog
   }
 });
 
-// GET /api/audit/export
-router.get('/export', authenticateToken, authorizeAuditor, apiLimiter, securityLogger, async (req, res) => {
+// GET /api/audit/export/csv
+router.get('/export/csv', authenticateToken, authorizeAuditor, apiLimiter, securityLogger, async (req, res) => {
   try {
-    const { format = 'csv', startDate, endDate } = req.query;
+    const { startDate, endDate } = req.query;
     
-    if (!['csv', 'pdf'].includes(format)) {
-      return res.status(400).json({ error: 'Formato inválido' });
-    }
-
-    const exportData = await auditService.exportAuditLogs({
-      format,
+    const logs = await auditService.getAuditLogs({
       startDate,
       endDate
     });
 
-    res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=audit-${Date.now()}.${format}`);
-    res.send(exportData);
+    // Gerar CSV
+    const csvContent = await auditService.generateCSV(logs);
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename=audit-logs-${Date.now()}.csv`);
+    res.send(csvContent);
 
   } catch (error) {
-    auditLogger.error('Erro ao exportar logs', { error: error.message });
+    auditLogger.error('Erro ao exportar CSV', { error: error.message });
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// GET /api/audit/export/pdf
+router.get('/export/pdf', authenticateToken, authorizeAuditor, apiLimiter, securityLogger, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    const logs = await auditService.getAuditLogs({
+      startDate,
+      endDate
+    });
+
+    // Gerar PDF
+    const pdfContent = await auditService.generatePDF(logs);
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=audit-logs-${Date.now()}.pdf`);
+    res.send(pdfContent);
+
+  } catch (error) {
+    auditLogger.error('Erro ao exportar PDF', { error: error.message });
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
