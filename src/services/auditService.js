@@ -273,16 +273,16 @@ class AuditService {
     console.log('Gerando CSV com', logs.length, 'logs');
     console.log('Informações do período:', periodInfo);
     
-    // Cabeçalhos das colunas melhorados (removendo redundâncias)
+    // Cabeçalhos das colunas (sem acentos para evitar problemas de codificação)
     const headers = [
-      'ID da Aprovação',
-      'Tipo de Solicitação',
+      'ID da Aprovacao',
+      'Tipo de Solicitacao', 
       'Solicitante',
       'Aprovador',
-      'Ação Realizada',
+      'Acao Realizada',
       'Justificativa',
       'Data/Hora',
-      'Duração do Processo'
+      'Duracao do Processo'
     ];
     
     // Processar dados dos logs com informações mais úteis
@@ -346,9 +346,9 @@ class AuditService {
       // Melhorar justificativa com informações mais úteis
       let enhancedJustification = log.comment || '-';
       if (log.action === 'deleted' && metadata.deletedApproval) {
-        enhancedJustification = `Aprovação deletada - Tipo: ${metadata.deletedApproval.type || 'N/A'}, Solicitante: ${metadata.deletedApproval.requester || 'N/A'}`;
+        enhancedJustification = `Aprovacao deletada - Tipo: ${metadata.deletedApproval.type || 'N/A'}, Solicitante: ${metadata.deletedApproval.requester || 'N/A'}`;
       } else if (log.action === 'restored' && metadata.restoredApproval) {
-        enhancedJustification = `Aprovação restaurada - Status anterior: ${metadata.restoredApproval.previousStatus || 'N/A'}`;
+        enhancedJustification = `Aprovacao restaurada - Status anterior: ${metadata.restoredApproval.previousStatus || 'N/A'}`;
       } else if (log.action === 'approved') {
         enhancedJustification = log.comment || 'Aprovado via sistema';
       } else if (log.action === 'rejected') {
@@ -371,11 +371,27 @@ class AuditService {
       return row;
     }));
 
-    // Construir conteúdo CSV
-    const csvLines = [
-      headers.join(','),
-      ...rows.map(row => row.map(field => `"${field}"`).join(','))
-    ];
+    // Construir conteúdo CSV com formatação correta
+    const csvLines = [];
+    
+    // Adicionar cabeçalho como uma única linha (garantir que não há quebras)
+    const cleanHeaders = headers.map(header => header.replace(/[\r\n\s]+/g, ' ').trim());
+    const headerLine = cleanHeaders.join(',');
+    csvLines.push(headerLine);
+    
+    // Adicionar linhas de dados
+    rows.forEach(row => {
+      const escapedRow = row.map(field => {
+        // Escapar aspas duplas e quebras de linha
+        const escapedField = String(field)
+          .replace(/"/g, '""')  // Duplicar aspas para escape
+          .replace(/\n/g, ' ')  // Substituir quebras de linha por espaço
+          .replace(/\r/g, ' ')  // Substituir retornos por espaço
+          .trim(); // Remover espaços extras
+        return `"${escapedField}"`;
+      });
+      csvLines.push(escapedRow.join(','));
+    });
 
     const csvContent = csvLines.join('\n');
     console.log('CSV gerado com sucesso, tamanho:', csvContent.length);
@@ -505,20 +521,20 @@ class AuditService {
             doc.moveDown(0.5);
           }
           
-          let metadata = {};
-          if (typeof log.metadata === 'string') {
-            try {
-              metadata = JSON.parse(log.metadata);
-            } catch (error) {
+        let metadata = {};
+        if (typeof log.metadata === 'string') {
+          try {
+            metadata = JSON.parse(log.metadata);
+          } catch (error) {
               console.error(`Erro ao parsear metadata do log ${index}:`, error);
-              metadata = {};
-            }
-          } else {
-            metadata = log.metadata || {};
+            metadata = {};
           }
+        } else {
+          metadata = log.metadata || {};
+        }
 
-          const deletedApproval = metadata.deletedApproval || {};
-          
+        const deletedApproval = metadata.deletedApproval || {};
+        
           // Buscar o tipo real da solicitação
           let requestType = 'N/A';
           if (log.approvalId) {
